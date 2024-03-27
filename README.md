@@ -20,3 +20,5 @@ This is a C# application designed to take any exectuable (.exe) and launch it. T
 - Scan for exetuables automatically
 
 # How to use
+
+![screenshot](https://github.com/Adam-OGithub/PorksLauncher/blob/main/images/demo/main_app_screenshot.png?raw=true)
