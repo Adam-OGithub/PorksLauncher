@@ -18,6 +18,7 @@ This is a C# application designed to take any exectuable (.exe) and launch it. T
 - Support for other types of files like `.jar`
 - Auto prompt user when launching an application to see if they want to add exectuable to the list.
 - Scan for exetuables automatically
+- Alphabetical sorting 
 
 # How to use
 * Add exe
@@ -29,7 +30,7 @@ This is a C# application designed to take any exectuable (.exe) and launch it. T
     - Prompt will appear click OK. 
 
 * Rename exe 
-    - Select exe then rename. 
+    - Select exe then rename button. 
     - Type new name then OK. 
 
 
