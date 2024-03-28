@@ -15,6 +15,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
 using static System.Net.Mime.MediaTypeNames;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
 
 namespace PorksLauncher
 {
@@ -31,16 +32,16 @@ namespace PorksLauncher
             {
                 return appDataFolder + "\\pork_launcher";
             }
-            public static string GetcsvFile(string appFolder)
+            public static string GetcsvFile(string appFolder,string csvName)
             {
-                return appFolder + "\\launch.csv";
+                return appFolder + "\\" + csvName;
             }
           
-            public static string[] GetExecutableInfo(string csvFile, string selectedText)
+            public static string[] GetCsvInfo(string csvFile, string selectedText)
             {
                 string[] outArray = new string[2];
-                Console.WriteLine("csv NAME: " + csvFile);
-                Console.WriteLine("Selected NAME: " + selectedText);
+                //Console.WriteLine("csv NAME: " + csvFile);
+                //Console.WriteLine("Selected NAME: " + selectedText);
                 // Open the file to read from and see if string is found.
                 using (StreamReader sr = File.OpenText(csvFile))
                 {
@@ -48,13 +49,13 @@ namespace PorksLauncher
                     while ((s = sr.ReadLine()) != null)
                     {
                         string[] words = s.Split(',');
-                        string exectuablePath = words[0];
-                        string exectuableName = words[1];
+                        string entryOne = words[0];
+                        string entryTwo = words[1];
 
-                        if (selectedText == exectuableName)
+                        if (selectedText == entryTwo)
                         {
-                            outArray[0] = exectuableName;
-                            outArray[1] = exectuablePath;
+                            outArray[0] = entryTwo;
+                            outArray[1] = entryOne;
 
                         }
                     }
@@ -69,26 +70,29 @@ namespace PorksLauncher
                 {
                     Form prompt = new Form()
                     {
-                        Width = 500,
+                        Width = 300,
                         Height = 150,
                         FormBorderStyle = FormBorderStyle.FixedDialog,
                         Text = caption,
                         StartPosition = FormStartPosition.CenterScreen
                     };
-                    Label textLabel = new Label() { Left = 50, Top = 20, Text = text, Width = 400 };
-                    TextBox textBox = new TextBox() { Left = 50, Top = 50, Width = 400 };
-                    Button confirmation = new Button() { Text = "Ok", Left = 350, Width = 100, Top = 70, DialogResult = DialogResult.OK };
+                    Label textLabel = new Label() { Left = 50, Top = 20, Text = text, Width = 200 };
+                    TextBox textBox = new TextBox() { Left = 50, Top = 50, Width = 200 };
+                    Button confirmation = new Button() { Text = "Ok", Left = 50, Width = 100, Top = 70, DialogResult = DialogResult.OK };
+                    Button cancel = new Button() { Text = "Cancel", Left = 150, Width = 100, Top = 70, DialogResult = DialogResult.Cancel };
                     confirmation.Click += (sender, e) => { prompt.Close(); };
                     prompt.Controls.Add(textBox);
                     prompt.Controls.Add(confirmation);
+                    prompt.Controls.Add(cancel);
                     prompt.Controls.Add(textLabel);
                     prompt.AcceptButton = confirmation;
 
                     return prompt.ShowDialog() == DialogResult.OK ? textBox.Text : "";
                 }
+
             }
 
-            public static bool LoadList(bool reload, ListBox listBoxIn)
+                public static bool LoadList(bool reload, ListBox listBoxIn)
             {
 
                 if(reload == true && listBoxIn.Items.Count > 1)
@@ -98,7 +102,7 @@ namespace PorksLauncher
 
                 string appDataFolder = Functions.GetAppDataFolder();
                 string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder);
+                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
 
                 // Open the file to read from.
                 using (StreamReader sr = File.OpenText(csvFile))
@@ -131,6 +135,7 @@ namespace PorksLauncher
         public Form1()
         {
             InitializeComponent();
+            settings_btn.Visible= false;
             Functions.LoadList(false,listBox1);
           
         }
@@ -168,7 +173,7 @@ namespace PorksLauncher
                         Directory.CreateDirectory(appFolder);
                     }
 
-                    string csvFile = Functions.GetcsvFile(appFolder);
+                    string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
 
 
                     if (!File.Exists(csvFile))
@@ -205,9 +210,9 @@ namespace PorksLauncher
                 string selectedText = listBox1.GetItemText(listBox1.SelectedItem);
                 string appDataFolder = Functions.GetAppDataFolder();
                 string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder);
+                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
                 // Open the file to read from and see if string is found.
-                var fileInfo = Functions.GetExecutableInfo(csvFile, selectedText);
+                var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
                 //if string is found prompt user and remove from file and list
                 if (fileInfo.Length > 1) {
                     string message = "Do you want to remove " + selectedText + " from the list?";
@@ -226,7 +231,7 @@ namespace PorksLauncher
         
             } else
             {
-                MessageBox.Show("No launcher selected to remove!");
+                MessageBox.Show("No executable selected to remove!");
             }
     
 
@@ -244,16 +249,23 @@ namespace PorksLauncher
                 //LAUNCH THE APP
                 string appDataFolder = Functions.GetAppDataFolder();
                 string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder);
+                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
                 // Open the file to read from and see if string is found.
-                var fileInfo = Functions.GetExecutableInfo(csvFile, selectedText);
+                var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
                 //if string is found prompt user and remove from file and list
-                if (fileInfo.Length > 1)
+                try
                 {
-                    Process process = new Process();
-                    // Configure the process using the StartInfo properties.
-                    process.StartInfo.FileName = fileInfo[1];
-                    process.Start();
+                    if (fileInfo.Length > 1)
+                    {
+                        Process process = new Process();
+                        // Configure the process using the StartInfo properties.
+                        process.StartInfo.FileName = fileInfo[1];
+                        process.Start();
+                    }
+                }
+                catch (Exception error)
+                { 
+                Console.WriteLine(error.ToString());
                 }
 
             }
@@ -271,9 +283,9 @@ namespace PorksLauncher
                 string selectedText = listBox1.GetItemText(listBox1.SelectedItem);
                 string appDataFolder = Functions.GetAppDataFolder();
                 string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder);
+                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
                 // Open the file to read from and see if string is found.
-                var fileInfo = Functions.GetExecutableInfo(csvFile, selectedText);
+                var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
                 //if string is found prompt user and rename file in list
 
                 if (fileInfo.Length > 1)
@@ -289,7 +301,11 @@ namespace PorksLauncher
                           if (line[1] == selectedText)
                           {
                            string newName = Functions.Prompt.ShowDialog("Please enter a new name for: " + selectedText, "Renaming: " + selectedText);
-                            oldLines[i] = line[0] + "," + newName;
+                            if(newName.Length > 1)
+                            {
+                                oldLines[i] = line[0] + "," + newName;
+                            }
+                           
                           }
                        
                         }
@@ -305,8 +321,59 @@ namespace PorksLauncher
             }
             else
             {
-                MessageBox.Show("No launcher selected to rename!");
+                MessageBox.Show("No executable selected to rename!");
             }
         }
+
+        private void settings_btn_Click(object sender, EventArgs e)
+        {
+            string appDataFolder = Functions.GetAppDataFolder();
+            string appFolder = Functions.GetAppFolder(appDataFolder);
+            string csvFile = Functions.GetcsvFile(appFolder, "settings.csv");
+
+            // Open the file to read from.
+            using (StreamReader sr = File.OpenText(csvFile))
+            {
+                string s = "";
+                while ((s = sr.ReadLine()) != null)
+                {
+                    string[] words = s.Split(',');
+                    string exectuableName = words[1];
+                    
+                }
+
+            }
+            Form prompt = new Form()
+            {
+                Width = 400,
+                Height = 500,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                Text = "Settings",
+                StartPosition = FormStartPosition.CenterScreen
+            };
+            Label textLabelAutoPrompt = new Label() { Left = 100, Top = 20, Text = "Enable/Disable Auto Prompt", Width = 200 };
+            Label textLabelAutoFind = new Label() { Left = 100, Top = 45, Text = "Enable/Disable Auto Executable scan", Width = 200 };
+            Button confirmation = new Button() { Text = "Ok", Left = 50, Width = 100, Top = 400, DialogResult = DialogResult.OK };
+            Button cancel = new Button() { Text = "Cancel", Left = 150, Width = 100, Top = 400, DialogResult = DialogResult.Cancel };
+            Button textLabelAutoPrompt_btn = new Button() { Text = "Cancel", Left = 50, Width = 50, Top = 15, DialogResult = DialogResult.OK };
+            Button textLabelAutoFind_btn = new Button() { Text = "Cancel", Left = 50, Width = 50, Top = 40, DialogResult = DialogResult.OK };
+            prompt.Controls.Add(confirmation);
+            prompt.Controls.Add(cancel);
+            prompt.Controls.Add(textLabelAutoPrompt_btn);
+            prompt.Controls.Add(textLabelAutoFind_btn);
+            prompt.Controls.Add(textLabelAutoPrompt);
+            prompt.Controls.Add(textLabelAutoFind);
+            prompt.AcceptButton = confirmation;
+            //textLabelAutoFind.Click += new EventHandler(do_something);
+            prompt.ShowDialog();
+  
+           
+        }
+
+       // private void do_something(object sender, EventArgs e)
+       // {
+        //    Console.WriteLine("HELLO");
+       // }
+
     }
 }

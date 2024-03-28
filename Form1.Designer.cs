@@ -33,6 +33,7 @@
             this.btn_rm = new System.Windows.Forms.Button();
             this.listBox1 = new System.Windows.Forms.ListBox();
             this.rename_btn = new System.Windows.Forms.Button();
+            this.settings_btn = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // btn_add
@@ -72,7 +73,7 @@
             this.listBox1.Location = new System.Drawing.Point(18, 75);
             this.listBox1.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.listBox1.Name = "listBox1";
-            this.listBox1.Size = new System.Drawing.Size(554, 565);
+            this.listBox1.Size = new System.Drawing.Size(667, 565);
             this.listBox1.TabIndex = 2;
             this.listBox1.SelectedIndexChanged += new System.EventHandler(this.listBox1_SelectedIndexChanged);
             // 
@@ -90,20 +91,33 @@
             this.rename_btn.UseVisualStyleBackColor = false;
             this.rename_btn.Click += new System.EventHandler(this.rename_btn_Click);
             // 
+            // settings_btn
+            // 
+            this.settings_btn.BackColor = System.Drawing.Color.White;
+            this.settings_btn.Font = new System.Drawing.Font("Comic Sans MS", 8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.settings_btn.Location = new System.Drawing.Point(594, 18);
+            this.settings_btn.Name = "settings_btn";
+            this.settings_btn.Size = new System.Drawing.Size(91, 35);
+            this.settings_btn.TabIndex = 4;
+            this.settings_btn.Text = "Settings";
+            this.settings_btn.UseVisualStyleBackColor = false;
+            this.settings_btn.Click += new System.EventHandler(this.settings_btn_Click);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(9F, 20F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.ActiveCaptionText;
-            this.ClientSize = new System.Drawing.Size(589, 649);
+            this.ClientSize = new System.Drawing.Size(698, 624);
+            this.Controls.Add(this.settings_btn);
             this.Controls.Add(this.rename_btn);
             this.Controls.Add(this.listBox1);
             this.Controls.Add(this.btn_rm);
             this.Controls.Add(this.btn_add);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
-            this.MaximumSize = new System.Drawing.Size(611, 705);
-            this.MinimumSize = new System.Drawing.Size(611, 705);
+            this.MaximumSize = new System.Drawing.Size(720, 680);
+            this.MinimumSize = new System.Drawing.Size(720, 680);
             this.Name = "Form1";
             this.Text = "PorksLauncher";
             this.ResumeLayout(false);
@@ -116,6 +130,7 @@
         private System.Windows.Forms.Button btn_rm;
         private System.Windows.Forms.ListBox listBox1;
         private System.Windows.Forms.Button rename_btn;
+        private System.Windows.Forms.Button settings_btn;
     }
 }
 
