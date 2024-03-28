@@ -32,16 +32,16 @@ namespace PorksLauncher
             {
                 return appDataFolder + "\\pork_launcher";
             }
-            public static string GetcsvFile(string appFolder)
+            public static string GetcsvFile(string appFolder,string csvName)
             {
-                return appFolder + "\\launch.csv";
+                return appFolder + "\\" + csvName;
             }
           
-            public static string[] GetExecutableInfo(string csvFile, string selectedText)
+            public static string[] GetCsvInfo(string csvFile, string selectedText)
             {
                 string[] outArray = new string[2];
-                Console.WriteLine("csv NAME: " + csvFile);
-                Console.WriteLine("Selected NAME: " + selectedText);
+                //Console.WriteLine("csv NAME: " + csvFile);
+                //Console.WriteLine("Selected NAME: " + selectedText);
                 // Open the file to read from and see if string is found.
                 using (StreamReader sr = File.OpenText(csvFile))
                 {
@@ -49,13 +49,13 @@ namespace PorksLauncher
                     while ((s = sr.ReadLine()) != null)
                     {
                         string[] words = s.Split(',');
-                        string exectuablePath = words[0];
-                        string exectuableName = words[1];
+                        string entryOne = words[0];
+                        string entryTwo = words[1];
 
-                        if (selectedText == exectuableName)
+                        if (selectedText == entryTwo)
                         {
-                            outArray[0] = exectuableName;
-                            outArray[1] = exectuablePath;
+                            outArray[0] = entryTwo;
+                            outArray[1] = entryOne;
 
                         }
                     }
@@ -102,7 +102,7 @@ namespace PorksLauncher
 
                 string appDataFolder = Functions.GetAppDataFolder();
                 string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder);
+                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
 
                 // Open the file to read from.
                 using (StreamReader sr = File.OpenText(csvFile))
@@ -135,6 +135,7 @@ namespace PorksLauncher
         public Form1()
         {
             InitializeComponent();
+            settings_btn.Visible= false;
             Functions.LoadList(false,listBox1);
           
         }
@@ -172,7 +173,7 @@ namespace PorksLauncher
                         Directory.CreateDirectory(appFolder);
                     }
 
-                    string csvFile = Functions.GetcsvFile(appFolder);
+                    string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
 
 
                     if (!File.Exists(csvFile))
@@ -209,9 +210,9 @@ namespace PorksLauncher
                 string selectedText = listBox1.GetItemText(listBox1.SelectedItem);
                 string appDataFolder = Functions.GetAppDataFolder();
                 string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder);
+                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
                 // Open the file to read from and see if string is found.
-                var fileInfo = Functions.GetExecutableInfo(csvFile, selectedText);
+                var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
                 //if string is found prompt user and remove from file and list
                 if (fileInfo.Length > 1) {
                     string message = "Do you want to remove " + selectedText + " from the list?";
@@ -248,9 +249,9 @@ namespace PorksLauncher
                 //LAUNCH THE APP
                 string appDataFolder = Functions.GetAppDataFolder();
                 string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder);
+                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
                 // Open the file to read from and see if string is found.
-                var fileInfo = Functions.GetExecutableInfo(csvFile, selectedText);
+                var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
                 //if string is found prompt user and remove from file and list
                 try
                 {
@@ -282,9 +283,9 @@ namespace PorksLauncher
                 string selectedText = listBox1.GetItemText(listBox1.SelectedItem);
                 string appDataFolder = Functions.GetAppDataFolder();
                 string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder);
+                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
                 // Open the file to read from and see if string is found.
-                var fileInfo = Functions.GetExecutableInfo(csvFile, selectedText);
+                var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
                 //if string is found prompt user and rename file in list
 
                 if (fileInfo.Length > 1)
@@ -326,7 +327,53 @@ namespace PorksLauncher
 
         private void settings_btn_Click(object sender, EventArgs e)
         {
+            string appDataFolder = Functions.GetAppDataFolder();
+            string appFolder = Functions.GetAppFolder(appDataFolder);
+            string csvFile = Functions.GetcsvFile(appFolder, "settings.csv");
 
+            // Open the file to read from.
+            using (StreamReader sr = File.OpenText(csvFile))
+            {
+                string s = "";
+                while ((s = sr.ReadLine()) != null)
+                {
+                    string[] words = s.Split(',');
+                    string exectuableName = words[1];
+                    
+                }
+
+            }
+            Form prompt = new Form()
+            {
+                Width = 400,
+                Height = 500,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                Text = "Settings",
+                StartPosition = FormStartPosition.CenterScreen
+            };
+            Label textLabelAutoPrompt = new Label() { Left = 100, Top = 20, Text = "Enable/Disable Auto Prompt", Width = 200 };
+            Label textLabelAutoFind = new Label() { Left = 100, Top = 45, Text = "Enable/Disable Auto Executable scan", Width = 200 };
+            Button confirmation = new Button() { Text = "Ok", Left = 50, Width = 100, Top = 400, DialogResult = DialogResult.OK };
+            Button cancel = new Button() { Text = "Cancel", Left = 150, Width = 100, Top = 400, DialogResult = DialogResult.Cancel };
+            Button textLabelAutoPrompt_btn = new Button() { Text = "Cancel", Left = 50, Width = 50, Top = 15, DialogResult = DialogResult.OK };
+            Button textLabelAutoFind_btn = new Button() { Text = "Cancel", Left = 50, Width = 50, Top = 40, DialogResult = DialogResult.OK };
+            prompt.Controls.Add(confirmation);
+            prompt.Controls.Add(cancel);
+            prompt.Controls.Add(textLabelAutoPrompt_btn);
+            prompt.Controls.Add(textLabelAutoFind_btn);
+            prompt.Controls.Add(textLabelAutoPrompt);
+            prompt.Controls.Add(textLabelAutoFind);
+            prompt.AcceptButton = confirmation;
+            //textLabelAutoFind.Click += new EventHandler(do_something);
+            prompt.ShowDialog();
+  
+           
         }
+
+       // private void do_something(object sender, EventArgs e)
+       // {
+        //    Console.WriteLine("HELLO");
+       // }
+
     }
 }
