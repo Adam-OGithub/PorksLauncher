@@ -15,6 +15,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
 using static System.Net.Mime.MediaTypeNames;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
 
 namespace PorksLauncher
 {
@@ -69,26 +70,29 @@ namespace PorksLauncher
                 {
                     Form prompt = new Form()
                     {
-                        Width = 500,
+                        Width = 300,
                         Height = 150,
                         FormBorderStyle = FormBorderStyle.FixedDialog,
                         Text = caption,
                         StartPosition = FormStartPosition.CenterScreen
                     };
-                    Label textLabel = new Label() { Left = 50, Top = 20, Text = text, Width = 400 };
-                    TextBox textBox = new TextBox() { Left = 50, Top = 50, Width = 400 };
-                    Button confirmation = new Button() { Text = "Ok", Left = 350, Width = 100, Top = 70, DialogResult = DialogResult.OK };
+                    Label textLabel = new Label() { Left = 50, Top = 20, Text = text, Width = 200 };
+                    TextBox textBox = new TextBox() { Left = 50, Top = 50, Width = 200 };
+                    Button confirmation = new Button() { Text = "Ok", Left = 50, Width = 100, Top = 70, DialogResult = DialogResult.OK };
+                    Button cancel = new Button() { Text = "Cancel", Left = 150, Width = 100, Top = 70, DialogResult = DialogResult.Cancel };
                     confirmation.Click += (sender, e) => { prompt.Close(); };
                     prompt.Controls.Add(textBox);
                     prompt.Controls.Add(confirmation);
+                    prompt.Controls.Add(cancel);
                     prompt.Controls.Add(textLabel);
                     prompt.AcceptButton = confirmation;
 
                     return prompt.ShowDialog() == DialogResult.OK ? textBox.Text : "";
                 }
+
             }
 
-            public static bool LoadList(bool reload, ListBox listBoxIn)
+                public static bool LoadList(bool reload, ListBox listBoxIn)
             {
 
                 if(reload == true && listBoxIn.Items.Count > 1)
@@ -226,7 +230,7 @@ namespace PorksLauncher
         
             } else
             {
-                MessageBox.Show("No launcher selected to remove!");
+                MessageBox.Show("No executable selected to remove!");
             }
     
 
@@ -248,12 +252,19 @@ namespace PorksLauncher
                 // Open the file to read from and see if string is found.
                 var fileInfo = Functions.GetExecutableInfo(csvFile, selectedText);
                 //if string is found prompt user and remove from file and list
-                if (fileInfo.Length > 1)
+                try
                 {
-                    Process process = new Process();
-                    // Configure the process using the StartInfo properties.
-                    process.StartInfo.FileName = fileInfo[1];
-                    process.Start();
+                    if (fileInfo.Length > 1)
+                    {
+                        Process process = new Process();
+                        // Configure the process using the StartInfo properties.
+                        process.StartInfo.FileName = fileInfo[1];
+                        process.Start();
+                    }
+                }
+                catch (Exception error)
+                { 
+                Console.WriteLine(error.ToString());
                 }
 
             }
@@ -289,7 +300,11 @@ namespace PorksLauncher
                           if (line[1] == selectedText)
                           {
                            string newName = Functions.Prompt.ShowDialog("Please enter a new name for: " + selectedText, "Renaming: " + selectedText);
-                            oldLines[i] = line[0] + "," + newName;
+                            if(newName.Length > 1)
+                            {
+                                oldLines[i] = line[0] + "," + newName;
+                            }
+                           
                           }
                        
                         }
@@ -305,8 +320,13 @@ namespace PorksLauncher
             }
             else
             {
-                MessageBox.Show("No launcher selected to rename!");
+                MessageBox.Show("No executable selected to rename!");
             }
+        }
+
+        private void settings_btn_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }
