@@ -98,7 +98,7 @@ namespace PorksLauncher
                 public static bool LoadList(bool reload, ListBox listBoxIn)
             {
 
-                if(reload == true && listBoxIn.Items.Count > 1)
+                if(reload == true)
                 {
                     listBoxIn.Items.Clear();
                 }
@@ -125,20 +125,25 @@ namespace PorksLauncher
 
             public static string[] getCvsContent(string filePath)
             {
-                string[] outArray = new string[25];
+                string[] outArray = new string[10];
                 //Console.WriteLine("csv NAME: " + csvFile);
                 //Console.WriteLine("Selected NAME: " + selectedText);
                 // Open the file to read from and see if string is found.
                 using (StreamReader sr = File.OpenText(filePath))
                 {
                     string s = "";
+                    int outArrayNum = 0;
                     while ((s = sr.ReadLine()) != null)
                     {
                         string[] words = s.Split(',');
                         
                         for(int i = 0; i < words.Length; i++)
                         {
-                            outArray[i] = words[i];
+                        
+                                outArray[outArrayNum] = words[i];
+
+                            //Increases the index of outArray to properly position words.
+                            outArrayNum++;
                         }
 
                         
@@ -165,10 +170,22 @@ namespace PorksLauncher
                 //Creates files in array
                 for(int i =0; i < filesCreatedArr.Length; i++)
                 {
-                    if (!File.Exists(filesCreatedArr[i]))
+                    var fullFilePath = appFolder + "/" + filesCreatedArr[i];
+                    if (!File.Exists(fullFilePath))
                     {
+                        System.IO.File.Create(fullFilePath).Dispose();
 
-                        System.IO.File.Create(appFolder + "/" + filesCreatedArr[i]).Dispose(); ;
+                        //Sets Default settings
+                        if (filesCreatedArr[i] == "settings.csv")
+                        {
+                            Console.WriteLine("hit");
+                            // Write to file created on launch
+                            using (StreamWriter sw = File.AppendText(fullFilePath))
+                            {
+                                sw.WriteLine("autoPrompt" + "," + "Disabled");
+                                sw.WriteLine("autoFind" + "," + "Disabled");
+                            }
+                        }
                     }
                 }
              
@@ -193,7 +210,7 @@ namespace PorksLauncher
         {
             Functions.createFiles();
             InitializeComponent();
-            // settings_btn.Visible= false;
+             settings_btn.Visible= false;
             Functions.LoadList(false,listBox1);
            
         }
@@ -361,7 +378,27 @@ namespace PorksLauncher
 
             string csvFile = Functions.GetcsvFile("settings.csv");
             string[] settingFileContent = Functions.getCvsContent(csvFile);
-            
+            string autoPromptBtnStatus = string.Empty;
+            string autoFindBtnStatus = string.Empty;
+
+            for (int i = 0; i < settingFileContent.Length; i++)
+            {
+                
+            // Check if divisable by 2 or 0 to retrive setting variable if it is enable / disabled
+             if(i == 0 || i % 2 == 0)
+                {
+                    switch(settingFileContent[i])
+                    {
+                        case "autoPrompt":
+                            autoPromptBtnStatus = settingFileContent[i + 1];
+                            break;
+                        case "autoFind":
+                            autoFindBtnStatus = settingFileContent[i + 1];
+                            break;
+                    }
+                }
+            }
+
             Form prompt = new Form()
             {
                 Width = 400,
@@ -370,30 +407,36 @@ namespace PorksLauncher
                 Text = "Settings",
                 StartPosition = FormStartPosition.CenterScreen
             };
+
             Label textLabelAutoPrompt = new Label() { Left = 100, Top = 20, Text = "Enable/Disable Auto Prompt", Width = 200 };
             Label textLabelAutoFind = new Label() { Left = 100, Top = 45, Text = "Enable/Disable Auto Executable scan", Width = 200 };
             Button confirmation = new Button() { Text = "Ok", Left = 50, Width = 100, Top = 400, DialogResult = DialogResult.OK };
             Button cancel = new Button() { Text = "Cancel", Left = 150, Width = 100, Top = 400, DialogResult = DialogResult.Cancel };
-            Button textLabelAutoPrompt_btn = new Button() { Text = "Cancel", Left = 50, Width = 50, Top = 15, DialogResult = DialogResult.OK };
-            Button textLabelAutoFind_btn = new Button() { Text = "Cancel", Left = 50, Width = 50, Top = 40, DialogResult = DialogResult.OK };
+            Button autoPrompt_btn = new Button() { Text = autoPromptBtnStatus, Left = 50, Width = 50, Top = 15 };
+            Button autoFind_btn = new Button() { Text = autoFindBtnStatus, Left = 50, Width = 50, Top = 40 };
             prompt.Controls.Add(confirmation);
             prompt.Controls.Add(cancel);
-            prompt.Controls.Add(textLabelAutoPrompt_btn);
-            prompt.Controls.Add(textLabelAutoFind_btn);
+            prompt.Controls.Add(autoPrompt_btn);
+            prompt.Controls.Add(autoFind_btn);
             prompt.Controls.Add(textLabelAutoPrompt);
             prompt.Controls.Add(textLabelAutoFind);
             prompt.AcceptButton = confirmation;
-            //textLabelAutoFind.Click += new EventHandler(do_something);
-            confirmation.Click += new EventHandler(save_settings);
+            autoPrompt_btn.Click += new EventHandler(textLabelAutoPrompt_btn_save);
+            autoFind_btn.Click += new EventHandler(textLabelAutoFind_btn_save);
             prompt.ShowDialog();
-  
+
+        }
+
+       private void textLabelAutoPrompt_btn_save(object sender, EventArgs e)
+       {
+            
+       }
+
+        private void textLabelAutoFind_btn_save(object sender, EventArgs e)
+        {
            
         }
 
-       private void save_settings(object sender, EventArgs e)
-       {
-            Console.WriteLine("HELLO");
-       }
 
     }
 }
