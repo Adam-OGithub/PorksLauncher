@@ -32,13 +32,16 @@ namespace PorksLauncher
             {
                 return appDataFolder + "\\pork_launcher";
             }
-            public static string GetcsvFile(string appFolder,string csvName)
+            public static string GetcsvFile(string csvName)
             {
+                string appDataFolder = Functions.GetAppDataFolder();
+                string appFolder = Functions.GetAppFolder(appDataFolder);
                 return appFolder + "\\" + csvName;
             }
           
             public static string[] GetCsvInfo(string csvFile, string selectedText)
             {
+         
                 string[] outArray = new string[2];
                 //Console.WriteLine("csv NAME: " + csvFile);
                 //Console.WriteLine("Selected NAME: " + selectedText);
@@ -99,10 +102,7 @@ namespace PorksLauncher
                 {
                     listBoxIn.Items.Clear();
                 }
-
-                string appDataFolder = Functions.GetAppDataFolder();
-                string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
+                string csvFile = Functions.GetcsvFile("launch.csv");
 
                 // Open the file to read from.
                 using (StreamReader sr = File.OpenText(csvFile))
@@ -150,8 +150,8 @@ namespace PorksLauncher
 
             public static bool createFiles()
             {
-                string listConfig = "launch.csv";
-                string settingsConfig = "settings.csv";
+                string[] filesCreatedArr = { "launch.csv", "settings.csv" };
+    
                 //Gets the appDataFolder location
                 string appDataFolder = Functions.GetAppDataFolder();
 
@@ -162,16 +162,16 @@ namespace PorksLauncher
                     Directory.CreateDirectory(appFolder);
                 }
 
-                if (!File.Exists(listConfig))
+                //Creates files in array
+                for(int i =0; i < filesCreatedArr.Length; i++)
                 {
-              
-                        System.IO.File.Create(appFolder + "/" + listConfig).Dispose(); ;
-                }
+                    if (!File.Exists(filesCreatedArr[i]))
+                    {
 
-                if (!File.Exists(settingsConfig))
-                {           
-                       System.IO.File.Create(appFolder + "/" + settingsConfig).Dispose(); ;
+                        System.IO.File.Create(appFolder + "/" + filesCreatedArr[i]).Dispose(); ;
+                    }
                 }
+             
 
                 return true;
             }
@@ -193,7 +193,7 @@ namespace PorksLauncher
         {
             Functions.createFiles();
             InitializeComponent();
-             settings_btn.Visible= false;
+            // settings_btn.Visible= false;
             Functions.LoadList(false,listBox1);
            
         }
@@ -201,8 +201,7 @@ namespace PorksLauncher
 
         private void btn_add_Click(object sender, EventArgs e)
         {
-            var fileContent = string.Empty;
-            var filePath = string.Empty;
+        
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
                 openFileDialog.InitialDirectory = "c:\\";
@@ -212,6 +211,8 @@ namespace PorksLauncher
 
                 if (openFileDialog.ShowDialog() == DialogResult.OK)
                 {
+                    var fileContent = string.Empty;
+                    var filePath = string.Empty;
                     //Get the path of specified file
                     filePath = openFileDialog.FileName;
 
@@ -221,13 +222,7 @@ namespace PorksLauncher
                     string[] executableNameWithExe = words.Last().Split('.');
                     string executableName = executableNameWithExe[0];
 
-                    //Gets the appDataFolder location
-                    string appDataFolder = Functions.GetAppDataFolder();
-
-                    //Sets the name and create folder for pork_launcher
-                    string appFolder = Functions.GetAppFolder(appDataFolder);
-
-                    string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
+                    string csvFile = Functions.GetcsvFile("launch.csv");
 
                         // Write to file created on launch
                         using (StreamWriter sw = File.AppendText(csvFile))
@@ -250,9 +245,7 @@ namespace PorksLauncher
             if (listIndex != -1)
             {
                 string selectedText = listBox1.GetItemText(listBox1.SelectedItem);
-                string appDataFolder = Functions.GetAppDataFolder();
-                string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
+                string csvFile = Functions.GetcsvFile("launch.csv");
                 // Open the file to read from and see if string is found.
                 var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
                 //if string is found prompt user and remove from file and list
@@ -289,9 +282,7 @@ namespace PorksLauncher
             {
                 Globals.counter = 0;
                 //LAUNCH THE APP
-                string appDataFolder = Functions.GetAppDataFolder();
-                string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
+                string csvFile = Functions.GetcsvFile("launch.csv");
                 // Open the file to read from and see if string is found.
                 var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
                 //if string is found prompt user and remove from file and list
@@ -323,9 +314,7 @@ namespace PorksLauncher
             if (listIndex != -1)
             {
                 string selectedText = listBox1.GetItemText(listBox1.SelectedItem);
-                string appDataFolder = Functions.GetAppDataFolder();
-                string appFolder = Functions.GetAppFolder(appDataFolder);
-                string csvFile = Functions.GetcsvFile(appFolder, "launch.csv");
+                string csvFile = Functions.GetcsvFile("launch.csv");
                 // Open the file to read from and see if string is found.
                 var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
                 //if string is found prompt user and rename file in list
@@ -369,9 +358,8 @@ namespace PorksLauncher
 
         private void settings_btn_Click(object sender, EventArgs e)
         {
-            string appDataFolder = Functions.GetAppDataFolder();
-            string appFolder = Functions.GetAppFolder(appDataFolder);
-            string csvFile = Functions.GetcsvFile(appFolder, "settings.csv");
+
+            string csvFile = Functions.GetcsvFile("settings.csv");
             string[] settingFileContent = Functions.getCvsContent(csvFile);
             
             Form prompt = new Form()
