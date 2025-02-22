@@ -1,442 +1,309 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Data;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Net.NetworkInformation;
-using System.Reflection;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Windows.Forms.VisualStyles;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.Window;
 
 namespace PorksLauncher
 {
     public partial class Form1 : Form
     {
-
-        public class Functions
+        public static class Functions
         {
-            public static string GetAppDataFolder()
+            private static readonly string AppDataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            private static readonly string AppFolder = Path.Combine(AppDataFolder, "pork_launcher");
+
+            public static string GetCsvFilePath(string csvName) => Path.Combine(AppFolder, csvName);
+
+            public static void EnsureAppFilesExist()
             {
-                return System.Environment.GetEnvironmentVariable("APPDATA"); //Roaming
-            }
-            public static string GetAppFolder(string appDataFolder)
-            {
-                return appDataFolder + "\\pork_launcher";
-            }
-            public static string GetcsvFile(string csvName)
-            {
-                string appDataFolder = Functions.GetAppDataFolder();
-                string appFolder = Functions.GetAppFolder(appDataFolder);
-                return appFolder + "\\" + csvName;
-            }
-          
-            public static string[] GetCsvInfo(string csvFile, string selectedText)
-            {
-         
-                string[] outArray = new string[2];
-                //Console.WriteLine("csv NAME: " + csvFile);
-                //Console.WriteLine("Selected NAME: " + selectedText);
-                // Open the file to read from and see if string is found.
-                using (StreamReader sr = File.OpenText(csvFile))
+                if (!Directory.Exists(AppFolder))
+                    Directory.CreateDirectory(AppFolder);
+
+                var filesToCreate = new[] { "launch.csv", "settings.csv" };
+                foreach (var file in filesToCreate)
                 {
-                    string s = "";
-                    while ((s = sr.ReadLine()) != null)
+                    string filePath = GetCsvFilePath(file);
+                    if (!File.Exists(filePath))
                     {
-                        string[] words = s.Split(',');
-                        string entryOne = words[0];
-                        string entryTwo = words[1];
-
-                        if (selectedText == entryTwo)
+                        File.Create(filePath).Dispose();
+                        if (file == "settings.csv")
                         {
-                            outArray[0] = entryTwo;
-                            outArray[1] = entryOne;
-
+                            File.AppendAllLines(filePath, new[] { "autoPrompt,Disabled", "autoFind,Disabled" });
                         }
                     }
-                    
                 }
-                return outArray;
             }
 
-            public static class Prompt
+            public static string[] GetCsvInfo(string csvFile, string searchText)
             {
-                public static string ShowDialog(string text, string caption)
-                {
-                    Form prompt = new Form()
-                    {
-                        Width = 300,
-                        Height = 150,
-                        FormBorderStyle = FormBorderStyle.FixedDialog,
-                        Text = caption,
-                        StartPosition = FormStartPosition.CenterScreen
-                    };
-                    Label textLabel = new Label() { Left = 50, Top = 20, Text = text, Width = 200 };
-                    TextBox textBox = new TextBox() { Left = 50, Top = 50, Width = 200 };
-                    Button confirmation = new Button() { Text = "Ok", Left = 50, Width = 100, Top = 70, DialogResult = DialogResult.OK };
-                    Button cancel = new Button() { Text = "Cancel", Left = 150, Width = 100, Top = 70, DialogResult = DialogResult.Cancel };
-                    confirmation.Click += (sender, e) => { prompt.Close(); };
-                    prompt.Controls.Add(textBox);
-                    prompt.Controls.Add(confirmation);
-                    prompt.Controls.Add(cancel);
-                    prompt.Controls.Add(textLabel);
-                    prompt.AcceptButton = confirmation;
+                if (!File.Exists(csvFile))
+                    return new string[0];
 
-                    return prompt.ShowDialog() == DialogResult.OK ? textBox.Text : "";
-                }
-
+                return File.ReadLines(csvFile)
+                           .Select(line => line.Split(','))
+                           .Where(parts => parts.Length > 1 && parts[1] == searchText)
+                           .Select(parts => new string[] { parts[1], parts[0] })
+                           .FirstOrDefault() ?? new string[0];
             }
 
-                public static bool LoadList(bool reload, ListBox listBoxIn)
+            public static bool LoadList(bool reload, ListBox listBox)
             {
+                if (reload) listBox.Items.Clear();
+                string csvFile = GetCsvFilePath("launch.csv");
 
-                if(reload == true)
-                {
-                    listBoxIn.Items.Clear();
-                }
-                string csvFile = Functions.GetcsvFile("launch.csv");
+                if (!File.Exists(csvFile)) return false;
 
-                // Open the file to read from.
-                using (StreamReader sr = File.OpenText(csvFile))
-                {
-                    string s = "";
-                    while ((s = sr.ReadLine()) != null)
-                    {
-                        if(s != "")
-                        {
-                            string[] words = s.Split(',');
-                            string exectuableName = words[1];
-                            listBoxIn.Items.Add(exectuableName);
-                        }
-                        
-                    }
-
-                }
+                listBox.Items.AddRange(File.ReadLines(csvFile)
+                                           .Where(line => !string.IsNullOrWhiteSpace(line))
+                                           .Select(line => line.Split(',')[1])
+                                           .ToArray());
                 return reload;
             }
 
-            public static string[] getCvsContent(string filePath)
+            public static bool RemoveEntryFromCsv(string csvFile, string searchText)
             {
-                string[] outArray = new string[10];
-                //Console.WriteLine("csv NAME: " + csvFile);
-                //Console.WriteLine("Selected NAME: " + selectedText);
-                // Open the file to read from and see if string is found.
-                using (StreamReader sr = File.OpenText(filePath))
-                {
-                    string s = "";
-                    int outArrayNum = 0;
-                    while ((s = sr.ReadLine()) != null)
-                    {
-                        string[] words = s.Split(',');
-                        
-                        for(int i = 0; i < words.Length; i++)
-                        {
-                        
-                                outArray[outArrayNum] = words[i];
+                if (!File.Exists(csvFile))
+                    return false;
 
-                            //Increases the index of outArray to properly position words.
-                            outArrayNum++;
-                        }
-
-                        
-                    }
-
-                }
-                return outArray;
-            }
-
-            public static bool createFiles()
-            {
-                string[] filesCreatedArr = { "launch.csv", "settings.csv" };
-    
-                //Gets the appDataFolder location
-                string appDataFolder = Functions.GetAppDataFolder();
-
-                //Sets the name and create folder for pork_launcher
-                string appFolder = appDataFolder + "\\pork_launcher";
-                if (!Directory.Exists(appFolder))
-                {
-                    Directory.CreateDirectory(appFolder);
-                }
-
-                //Creates files in array
-                for(int i =0; i < filesCreatedArr.Length; i++)
-                {
-                    var fullFilePath = appFolder + "/" + filesCreatedArr[i];
-                    if (!File.Exists(fullFilePath))
-                    {
-                        System.IO.File.Create(fullFilePath).Dispose();
-
-                        //Sets Default settings
-                        if (filesCreatedArr[i] == "settings.csv")
-                        {
-                            Console.WriteLine("hit");
-                            // Write to file created on launch
-                            using (StreamWriter sw = File.AppendText(fullFilePath))
-                            {
-                                sw.WriteLine("autoPrompt" + "," + "Disabled");
-                                sw.WriteLine("autoFind" + "," + "Disabled");
-                            }
-                        }
-                    }
-                }
-             
-
+                var newLines = File.ReadLines(csvFile).Where(line => !line.Contains(searchText)).ToList();
+                File.WriteAllLines(csvFile, newLines);
                 return true;
             }
 
+            public static string ShowPromptDialog(string text, string caption)
+            {
+                using (var prompt = new Form { Width = 300, Height = 150, Text = caption, FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterScreen })
+                {
+                    var label = new Label { Left = 50, Top = 20, Text = text, Width = 200 };
+                    var textBox = new TextBox { Left = 50, Top = 50, Width = 200 };
+                    var okButton = new Button { Text = "OK", Left = 50, Width = 100, Top = 70, DialogResult = DialogResult.OK };
+                    var cancelButton = new Button { Text = "Cancel", Left = 150, Width = 100, Top = 70, DialogResult = DialogResult.Cancel };
+
+                    prompt.Controls.Add(label);
+                    prompt.Controls.Add(textBox);
+                    prompt.Controls.Add(okButton);
+                    prompt.Controls.Add(cancelButton);
+                    prompt.AcceptButton = okButton;
+
+                    return prompt.ShowDialog() == DialogResult.OK ? textBox.Text : string.Empty;
+                }
+            }
+
+            public static string GetAppDataFolder()
+            {
+                return Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData); // Roaming
+            }
+
+            public static string GetAppFolder(string appDataFolder)
+            {
+                return Path.Combine(appDataFolder, "pork_launcher");
+            }
+
+            public static string GetcsvFile(string csvName)
+            {
+                string appFolder = GetAppFolder(GetAppDataFolder());
+                return Path.Combine(appFolder, csvName);
+            }
+
+            public static Dictionary<string, string> GetCsvContent(string filePath)
+            {
+                Dictionary<string, string> settings = new Dictionary<string, string>();
+
+                if (!File.Exists(filePath))
+                {
+                    return settings;
+                }
+
+                foreach (var line in File.ReadAllLines(filePath))
+                {
+                    var parts = line.Split(',');
+                    if (parts.Length == 2)
+                    {
+                        settings[parts[0].Trim()] = parts[1].Trim();
+                    }
+                }
+
+                return settings;
+            }
+
+            public static void SaveCsvContent(string filePath, Dictionary<string, string> settings)
+            {
+                List<string> lines = settings.Select(kvp => $"{kvp.Key},{kvp.Value}").ToList();
+                File.WriteAllLines(filePath, lines);
+            }
+
+
         }
 
-        static class Globals
+        private static class Globals
         {
-            // global int
-            public static int counter = 0;
-
-            public static string lastValue = "";
-
-            public static string executablePath = "";
-
+            public static int Counter { get; set; }
+            public static string LastValue { get; set; } = "";
         }
 
         public Form1()
         {
-            Functions.createFiles();
             InitializeComponent();
-             settings_btn.Visible= false;
-            Functions.LoadList(false,listBox1);
-           
+            Functions.EnsureAppFilesExist();
+            settings_btn.Visible = true;
+            Functions.LoadList(false, listBox1);
         }
-
 
         private void btn_add_Click(object sender, EventArgs e)
         {
-        
-            using (OpenFileDialog openFileDialog = new OpenFileDialog())
+            using (var openFileDialog = new OpenFileDialog { Filter = "Executables (*.exe)|*.exe", InitialDirectory = "C:\\", RestoreDirectory = true })
             {
-                openFileDialog.InitialDirectory = "c:\\";
-                openFileDialog.Filter = "executables (*.exe)|*.exe";
-                openFileDialog.FilterIndex = 2;
-                openFileDialog.RestoreDirectory = true;
+                if (openFileDialog.ShowDialog() != DialogResult.OK) return;
 
-                if (openFileDialog.ShowDialog() == DialogResult.OK)
-                {
-                    var fileContent = string.Empty;
-                    var filePath = string.Empty;
-                    //Get the path of specified file
-                    filePath = openFileDialog.FileName;
+                string filePath = openFileDialog.FileName;
+                string executableName = Path.GetFileNameWithoutExtension(filePath);
+                string csvFile = Functions.GetCsvFilePath("launch.csv");
 
-                    //Splits file path 
-                    string[] words = filePath.Split('\\');
-                    //Gets the last entry in filePath
-                    string[] executableNameWithExe = words.Last().Split('.');
-                    string executableName = executableNameWithExe[0];
-
-                    string csvFile = Functions.GetcsvFile("launch.csv");
-
-                        // Write to file created on launch
-                        using (StreamWriter sw = File.AppendText(csvFile))
-                        {
-                            sw.WriteLine(filePath + "," + executableName);
-                        }
-                      
-                    listBox1.Items.Add(executableName);
-
-                }
-
-
+                File.AppendAllText(csvFile, $"{filePath},{executableName}{Environment.NewLine}");
+                listBox1.Items.Add(executableName);
             }
-
         }
 
         private void btn_rm_Click(object sender, EventArgs e)
         {
-           int listIndex = listBox1.SelectedIndex;
-            if (listIndex != -1)
-            {
-                string selectedText = listBox1.GetItemText(listBox1.SelectedItem);
-                string csvFile = Functions.GetcsvFile("launch.csv");
-                // Open the file to read from and see if string is found.
-                var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
-                //if string is found prompt user and remove from file and list
-                if (fileInfo.Length > 1) {
-                    string message = "Do you want to remove " + selectedText + " from the list?";
-                    string title = "Close Window";
-                    MessageBoxButtons buttons = MessageBoxButtons.YesNo;
-                    DialogResult result = MessageBox.Show(message, title, buttons);
-                    if (result == DialogResult.Yes)
-                    {
-                        var oldLines = System.IO.File.ReadAllLines(csvFile);
-                        var newLines = oldLines.Where(line => !line.Contains(selectedText));
-                        System.IO.File.WriteAllLines(csvFile, newLines);
-                        listBox1.Items.Remove(fileInfo[0]);
-                        Globals.counter = 0;
-                    }
-                }
-        
-            } else
+            if (listBox1.SelectedIndex == -1)
             {
                 MessageBox.Show("No executable selected to remove!");
+                return;
             }
-    
 
+            string selectedText = listBox1.GetItemText(listBox1.SelectedItem);
+            string csvFile = Functions.GetCsvFilePath("launch.csv");
 
+            if (Functions.GetCsvInfo(csvFile, selectedText).Length > 1)
+            {
+                if (MessageBox.Show($"Do you want to remove {selectedText}?", "Confirm", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                {
+                    Functions.RemoveEntryFromCsv(csvFile, selectedText);
+                    listBox1.Items.Remove(selectedText);
+                }
+            }
         }
 
         private void listBox1_SelectedIndexChanged(object sender, EventArgs e)
         {
             string selectedText = listBox1.GetItemText(listBox1.SelectedItem);
-            //Make user double click same index to launch app
-            //Single click so you can highlight and remove
-            if (Globals.counter >= 1 && Globals.lastValue == selectedText)
+
+            if (Globals.Counter >= 1 && Globals.LastValue == selectedText)
             {
-                Globals.counter = 0;
-                //LAUNCH THE APP
-                string csvFile = Functions.GetcsvFile("launch.csv");
-                // Open the file to read from and see if string is found.
+                Globals.Counter = 0;
+                string csvFile = Functions.GetCsvFilePath("launch.csv");
                 var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
-                //if string is found prompt user and remove from file and list
-                try
+
+                if (fileInfo.Length > 1)
                 {
-                    if (fileInfo.Length > 1)
+                    try
                     {
-                        Process process = new Process();
-                        // Configure the process using the StartInfo properties.
-                        process.StartInfo.FileName = fileInfo[1];
-                        process.Start();
+                        Process.Start(fileInfo[1]);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error launching application: {ex.Message}");
                     }
                 }
-                catch (Exception error)
-                { 
-                Console.WriteLine(error.ToString());
-                }
-
             }
-            Globals.lastValue = selectedText;
-            Console.WriteLine(Globals.counter.ToString());
-            Globals.counter++;
 
+            Globals.LastValue = selectedText;
+            Globals.Counter++;
         }
 
         private void rename_btn_Click(object sender, EventArgs e)
         {
-            int listIndex = listBox1.SelectedIndex;
-            if (listIndex != -1)
-            {
-                string selectedText = listBox1.GetItemText(listBox1.SelectedItem);
-                string csvFile = Functions.GetcsvFile("launch.csv");
-                // Open the file to read from and see if string is found.
-                var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
-                //if string is found prompt user and rename file in list
-
-                if (fileInfo.Length > 1)
-                {
-        
-                        var oldLines = System.IO.File.ReadAllLines(csvFile);
-                       
-                        for (int i = 0; i < oldLines.Length; i++)
-                        {                  
-                            string input = oldLines[i];
-                            string[] line = input.Split(',');
-
-                          if (line[1] == selectedText)
-                          {
-                           string newName = Functions.Prompt.ShowDialog("Please enter a new name for: " + selectedText, "Renaming: " + selectedText);
-                            if(newName.Length > 1)
-                            {
-                                oldLines[i] = line[0] + "," + newName;
-                            }
-                           
-                          }
-                       
-                        }
- 
-                        System.IO.File.WriteAllLines(csvFile, oldLines);
-                        Functions.LoadList(true, listBox1);
-
-
-                    Globals.counter = 0;
-                    
-                }
-
-            }
-            else
+            if (listBox1.SelectedIndex == -1)
             {
                 MessageBox.Show("No executable selected to rename!");
+                return;
+            }
+
+            string selectedText = listBox1.GetItemText(listBox1.SelectedItem);
+            string csvFile = Functions.GetCsvFilePath("launch.csv");
+            var fileInfo = Functions.GetCsvInfo(csvFile, selectedText);
+
+            if (fileInfo.Length > 1)
+            {
+                string newName = Functions.ShowPromptDialog($"Enter a new name for: {selectedText}", $"Renaming: {selectedText}");
+                if (!string.IsNullOrWhiteSpace(newName))
+                {
+                    var lines = File.ReadAllLines(csvFile);
+                    for (int i = 0; i < lines.Length; i++)
+                    {
+                        var parts = lines[i].Split(',');
+                        if (parts.Length > 1 && parts[1] == selectedText)
+                        {
+                            lines[i] = $"{parts[0]},{newName}";
+                        }
+                    }
+
+                    File.WriteAllLines(csvFile, lines);
+                    Functions.LoadList(true, listBox1);
+                }
             }
         }
 
+
         private void settings_btn_Click(object sender, EventArgs e)
         {
-
             string csvFile = Functions.GetcsvFile("settings.csv");
-            string[] settingFileContent = Functions.getCvsContent(csvFile);
-            string autoPromptBtnStatus = string.Empty;
-            string autoFindBtnStatus = string.Empty;
+            Dictionary<string, string> settings = Functions.GetCsvContent(csvFile);
 
-            for (int i = 0; i < settingFileContent.Length; i++)
-            {
-                
-            // Check if divisable by 2 or 0 to retrive setting variable if it is enable / disabled
-             if(i == 0 || i % 2 == 0)
-                {
-                    switch(settingFileContent[i])
-                    {
-                        case "autoPrompt":
-                            autoPromptBtnStatus = settingFileContent[i + 1];
-                            break;
-                        case "autoFind":
-                            autoFindBtnStatus = settingFileContent[i + 1];
-                            break;
-                    }
-                }
-            }
+            string autoPromptBtnStatus = settings.ContainsKey("autoPrompt") ? settings["autoPrompt"] : "Off";
+            string autoFindBtnStatus = settings.ContainsKey("autoFind") ? settings["autoFind"] : "Off";
 
             Form prompt = new Form()
             {
                 Width = 400,
-                Height = 500,
+                Height = 200,
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 Text = "Settings",
                 StartPosition = FormStartPosition.CenterScreen
             };
 
-            Label textLabelAutoPrompt = new Label() { Left = 100, Top = 20, Text = "Enable/Disable Auto Prompt", Width = 200 };
-            Label textLabelAutoFind = new Label() { Left = 100, Top = 45, Text = "Enable/Disable Auto Executable scan", Width = 200 };
-            Button confirmation = new Button() { Text = "Ok", Left = 50, Width = 100, Top = 400, DialogResult = DialogResult.OK };
-            Button cancel = new Button() { Text = "Cancel", Left = 150, Width = 100, Top = 400, DialogResult = DialogResult.Cancel };
-            Button autoPrompt_btn = new Button() { Text = autoPromptBtnStatus, Left = 50, Width = 50, Top = 15 };
-            Button autoFind_btn = new Button() { Text = autoFindBtnStatus, Left = 50, Width = 50, Top = 40 };
+            Label labelAutoPrompt = new Label() { Left = 20, Top = 20, Text = "Enable/Disable Auto Prompt", Width = 200 };
+            Label labelAutoFind = new Label() { Left = 20, Top = 60, Text = "Enable/Disable Auto Executable Scan", Width = 250 };
+
+            Button autoPrompt_btn = new Button() { Text = autoPromptBtnStatus, Left = 250, Width = 80, Top = 15 };
+            Button autoFind_btn = new Button() { Text = autoFindBtnStatus, Left = 250, Width = 80, Top = 55 };
+            Button confirmation = new Button() { Text = "OK", Left = 100, Width = 80, Top = 120, DialogResult = DialogResult.OK };
+            Button cancel = new Button() { Text = "Cancel", Left = 200, Width = 80, Top = 120, DialogResult = DialogResult.Cancel };
+
+            autoPrompt_btn.Click += (s, ev) => ToggleSetting(autoPrompt_btn);
+            autoFind_btn.Click += (s, ev) => ToggleSetting(autoFind_btn);
+            confirmation.Click += (s, ev) => SaveSettings(csvFile, autoPrompt_btn.Text, autoFind_btn.Text);
+
+            prompt.Controls.Add(labelAutoPrompt);
+            prompt.Controls.Add(autoPrompt_btn);
+            prompt.Controls.Add(labelAutoFind);
+            prompt.Controls.Add(autoFind_btn);
             prompt.Controls.Add(confirmation);
             prompt.Controls.Add(cancel);
-            prompt.Controls.Add(autoPrompt_btn);
-            prompt.Controls.Add(autoFind_btn);
-            prompt.Controls.Add(textLabelAutoPrompt);
-            prompt.Controls.Add(textLabelAutoFind);
-            prompt.AcceptButton = confirmation;
-            autoPrompt_btn.Click += new EventHandler(textLabelAutoPrompt_btn_save);
-            autoFind_btn.Click += new EventHandler(textLabelAutoFind_btn_save);
+
             prompt.ShowDialog();
-
         }
 
-       private void textLabelAutoPrompt_btn_save(object sender, EventArgs e)
-       {
-            
-       }
-
-        private void textLabelAutoFind_btn_save(object sender, EventArgs e)
+        private void ToggleSetting(Button btn)
         {
-           
+            btn.Text = (btn.Text == "On") ? "Off" : "On";
         }
 
+        private void SaveSettings(string filePath, string autoPromptStatus, string autoFindStatus)
+        {
+            Dictionary<string, string> settings = new Dictionary<string, string>
+        {
+            { "autoPrompt", autoPromptStatus },
+            { "autoFind", autoFindStatus }
+        };
+
+            Functions.SaveCsvContent(filePath, settings);
+            MessageBox.Show("Settings saved successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
 
     }
 }
+
