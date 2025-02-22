@@ -1,14 +1,18 @@
-﻿using System;
+﻿using PorksLauncher.Classes;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 
+
+
 namespace PorksLauncher
 {
     public partial class Form1 : Form
     {
+
         public static class Functions
         {
             private static readonly string AppDataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -143,12 +147,24 @@ namespace PorksLauncher
             public static string LastValue { get; set; } = "";
         }
 
+        private ProcessMonitor processMonitor;
+
         public Form1()
         {
+
             InitializeComponent();
             Functions.EnsureAppFilesExist();
             settings_btn.Visible = true;
             Functions.LoadList(false, listBox1);
+
+            processMonitor = new ProcessMonitor(listBox1);
+
+            // Check settings and start monitoring if autoFind is enabled
+            var settings = Functions.GetCsvContent(Functions.GetCsvFilePath("settings.csv"));
+            if (settings.TryGetValue("autoFind", out string autoFind) && autoFind == "On")
+            {
+                processMonitor.StartMonitoring();
+            }
         }
 
         private void btn_add_Click(object sender, EventArgs e)
@@ -289,7 +305,16 @@ namespace PorksLauncher
 
         private void ToggleSetting(Button btn)
         {
-            btn.Text = (btn.Text == "On") ? "Off" : "On";
+            bool isOn = btn.Text == "On";
+            btn.Text = isOn ? "Off" : "On";
+
+            if (btn.Name == "autoFind_btn")
+            {
+                if (btn.Text == "On")
+                    processMonitor.StartMonitoring();
+                else
+                    processMonitor.StopMonitoring();
+            }
         }
 
         private void SaveSettings(string filePath, string autoPromptStatus, string autoFindStatus)
@@ -302,6 +327,12 @@ namespace PorksLauncher
 
             Functions.SaveCsvContent(filePath, settings);
             MessageBox.Show("Settings saved successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            processMonitor.StopMonitoring();
+            base.OnFormClosing(e);
         }
 
     }
