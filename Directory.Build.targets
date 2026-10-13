@@ -1,0 +1,11 @@
+<Project>
+  <!-- SQLitePCLRaw 2.1.12's .NET Framework targets copy a Windows ARM32
+       binary that the package no longer ships. Keep the x86/x64 runtime
+       assets and remove only that obsolete item when its file is absent. -->
+  <Target Name="RemoveObsoleteSQLiteArm32Asset" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <Content Remove="@(Content)"
+               Condition="'%(Content.Link)' == 'runtimes\win-arm\native\e_sqlite3.dll' And !Exists('%(Content.Identity)')" />
+    </ItemGroup>
+  </Target>
+</Project>

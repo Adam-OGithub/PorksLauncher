@@ -13,6 +13,10 @@
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
+            if (disposing)
+            {
+                processMonitor?.Dispose();
+            }
             if (disposing && (components != null))
             {
                 components.Dispose();
@@ -46,7 +50,7 @@
             this.btn_add.Name = "btn_add";
             this.btn_add.Size = new System.Drawing.Size(157, 35);
             this.btn_add.TabIndex = 0;
-            this.btn_add.Text = "Add Exe";
+            this.btn_add.Text = "Add App";
             this.btn_add.UseVisualStyleBackColor = false;
             this.btn_add.Click += new System.EventHandler(this.btn_add_Click);
             // 
@@ -60,7 +64,7 @@
             this.btn_rm.Name = "btn_rm";
             this.btn_rm.Size = new System.Drawing.Size(172, 35);
             this.btn_rm.TabIndex = 1;
-            this.btn_rm.Text = "Remove Exe";
+            this.btn_rm.Text = "Remove App";
             this.btn_rm.UseVisualStyleBackColor = false;
             this.btn_rm.Click += new System.EventHandler(this.btn_rm_Click);
             // 
@@ -75,7 +79,7 @@
             this.listBox1.Name = "listBox1";
             this.listBox1.Size = new System.Drawing.Size(667, 565);
             this.listBox1.TabIndex = 2;
-            this.listBox1.SelectedIndexChanged += new System.EventHandler(this.listBox1_SelectedIndexChanged);
+            this.listBox1.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.listBox1_MouseDoubleClick);
             // 
             // rename_btn
             // 
@@ -87,7 +91,7 @@
             this.rename_btn.Name = "rename_btn";
             this.rename_btn.Size = new System.Drawing.Size(172, 35);
             this.rename_btn.TabIndex = 3;
-            this.rename_btn.Text = "Rename Exe";
+            this.rename_btn.Text = "Rename App";
             this.rename_btn.UseVisualStyleBackColor = false;
             this.rename_btn.Click += new System.EventHandler(this.rename_btn_Click);
             // 

@@ -1,24 +1,24 @@
 ﻿using System;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using System.Collections.Generic;
 
 namespace PorksLauncher.Classes
 {
-    public class ProcessMonitor
+    public class ProcessMonitor : IDisposable
     {
         private Timer processCheckTimer;
         private ListBox listBox;
-        private string csvFilePath;
+        private readonly LauncherDatabase database;
+        private bool checkingProcesses;
         private HashSet<string> declinedProcesses; // Stores rejected processes
         private string selfProcessName; // Stores the application's own process name
 
-        public ProcessMonitor(ListBox targetListBox)
+        public ProcessMonitor(ListBox targetListBox, LauncherDatabase database)
         {
             listBox = targetListBox;
-            csvFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "pork_launcher", "launch.csv");
+            this.database = database;
             declinedProcesses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             selfProcessName = Process.GetCurrentProcess().ProcessName; // Get self process name
 
@@ -36,50 +36,62 @@ namespace PorksLauncher.Classes
             processCheckTimer.Stop();
         }
 
-        private bool IsProcessInCsv(string processName)
+        public void Dispose()
         {
-            // Read all lines from the CSV and check if any contains the process name
-            if (!File.Exists(csvFilePath))
-                return false;
-
-            var lines = File.ReadAllLines(csvFilePath);
-            return lines.Any(line => line.Split(',')[1] == processName); // Check if the name exists
+            processCheckTimer.Dispose();
         }
 
         private void ProcessCheckTimer_Tick(object sender, EventArgs e)
         {
-            var runningProcesses = Process.GetProcesses()
-                .Where(p => !string.IsNullOrEmpty(p.MainWindowTitle)) // Only visible window processes
-                .Where(p => !IsSystemProcess(p)) // Skip system processes
-                .ToList();
-
-            foreach (Process process in runningProcesses)
+            // A modal prompt pumps timer events; do not scan again while one is open.
+            if (checkingProcesses) return;
+            checkingProcesses = true;
+            Process[] runningProcesses = null;
+            try
             {
-                string processName = process.ProcessName;
-                string processPath = GetProcessPath(process);
-
-                if (string.IsNullOrEmpty(processPath) || processName.Equals(selfProcessName, StringComparison.OrdinalIgnoreCase))
-                    continue; // Skip self and processes with no valid path
-
-                if (!listBox.Items.Contains(processPath) && !declinedProcesses.Contains(processPath)) // Use path for tracking
+                var knownPaths = new HashSet<string>(database.GetLaunchers().Select(entry => entry.FilePath),
+                    StringComparer.OrdinalIgnoreCase);
+                runningProcesses = Process.GetProcesses();
+                foreach (Process process in runningProcesses)
                 {
-                    // Skip if the process is already in the list box or CSV file
-                    if (listBox.Items.Contains(processName) || IsProcessInCsv(processName))
+                    string processName;
+                    string processPath;
+                    try
                     {
-                        continue;
+                        if (string.IsNullOrEmpty(process.MainWindowTitle) || IsSystemProcess(process)) continue;
+                        processName = process.ProcessName;
+                        processPath = GetProcessPath(process);
                     }
+                    catch (InvalidOperationException) { continue; } // Process exited during the scan.
+                    catch (System.ComponentModel.Win32Exception) { continue; }
+
+                    if (string.IsNullOrEmpty(processPath) ||
+                        processName.Equals(selfProcessName, StringComparison.OrdinalIgnoreCase) ||
+                        knownPaths.Contains(processPath) || declinedProcesses.Contains(processPath)) continue;
 
                     if (AskToAddProcess(processName, processPath))
                     {
-                        listBox.Items.Add(processName);
-                        // Save path first, then name
-                        File.AppendAllText(csvFilePath, $"{processPath},{processName}{Environment.NewLine}"); // Path first, then name
+                        var entry = database.AddLauncher(processPath, processName);
+                        listBox.Items.Add(entry);
+                        knownPaths.Add(processPath);
                     }
                     else
                     {
-                        declinedProcesses.Add(processPath); // Store rejected paths
+                        declinedProcesses.Add(processPath);
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                StopMonitoring();
+                MessageBox.Show($"Executable scanning stopped: {ex.Message}", "Scanner error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                if (runningProcesses != null)
+                    foreach (var process in runningProcesses) process.Dispose();
+                checkingProcesses = false;
             }
         }
 
