@@ -48,6 +48,11 @@ namespace PorksLauncher.Classes
                     CREATE TABLE IF NOT EXISTS Settings (
                         Name TEXT PRIMARY KEY,
                         Value TEXT NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS DeniedExecutables (
+                        FilePath TEXT PRIMARY KEY COLLATE NOCASE,
+                        DisplayName TEXT NOT NULL,
+                        IsDenied INTEGER NOT NULL CHECK (IsDenied IN (0, 1))
                     );";
                 command.ExecuteNonQuery();
 
@@ -156,11 +161,20 @@ namespace PorksLauncher.Classes
         public void RemoveLauncher(long id)
         {
             using (var connection = OpenConnection())
+            using (var transaction = connection.BeginTransaction())
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "DELETE FROM Launchers WHERE Id = $id;";
+                // Save the denial and remove the entry together, so a failed save
+                // cannot leave a removed application eligible for another prompt.
+                command.Transaction = transaction;
+                command.CommandText = @"
+                    INSERT INTO DeniedExecutables (FilePath, DisplayName, IsDenied)
+                    SELECT FilePath, DisplayName, 1 FROM Launchers WHERE Id = $id
+                    ON CONFLICT(FilePath) DO UPDATE SET DisplayName = excluded.DisplayName, IsDenied = 1;
+                    DELETE FROM Launchers WHERE Id = $id;";
                 command.Parameters.AddWithValue("$id", id);
                 command.ExecuteNonQuery();
+                transaction.Commit();
             }
         }
 
@@ -173,6 +187,45 @@ namespace PorksLauncher.Classes
                 command.Parameters.AddWithValue("$id", id);
                 command.Parameters.AddWithValue("$name", displayName);
                 command.ExecuteNonQuery();
+            }
+        }
+
+        public List<DeniedExecutable> GetDeniedExecutables()
+        {
+            var entries = new List<DeniedExecutable>();
+            using (var connection = OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT FilePath, DisplayName, IsDenied FROM DeniedExecutables ORDER BY DisplayName COLLATE NOCASE, FilePath;";
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read()) entries.Add(new DeniedExecutable
+                    {
+                        FilePath = reader.GetString(0), DisplayName = reader.GetString(1), IsDenied = reader.GetInt32(2) != 0
+                    });
+                }
+            }
+            return entries;
+        }
+
+        public void SaveDeniedExecutables(IEnumerable<DeniedExecutable> entries)
+        {
+            using (var connection = OpenConnection())
+            using (var transaction = connection.BeginTransaction())
+            {
+                foreach (var entry in entries)
+                using (var command = connection.CreateCommand())
+                {
+                    command.Transaction = transaction;
+                    command.CommandText = @"
+                        INSERT INTO DeniedExecutables (FilePath, DisplayName, IsDenied) VALUES ($path, $name, $denied)
+                        ON CONFLICT(FilePath) DO UPDATE SET DisplayName = excluded.DisplayName, IsDenied = excluded.IsDenied;";
+                    command.Parameters.AddWithValue("$path", Path.GetFullPath(entry.FilePath));
+                    command.Parameters.AddWithValue("$name", entry.DisplayName);
+                    command.Parameters.AddWithValue("$denied", entry.IsDenied ? 1 : 0);
+                    command.ExecuteNonQuery();
+                }
+                transaction.Commit();
             }
         }
 

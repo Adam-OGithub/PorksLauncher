@@ -1,162 +1,139 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
-using System.Collections.Generic;
 
 namespace PorksLauncher.Classes
 {
     public class ProcessMonitor : IDisposable
     {
-        private Timer processCheckTimer;
-        private ListBox listBox;
+        private readonly Timer processCheckTimer;
+        private readonly ListBox listBox;
         private readonly LauncherDatabase database;
+        private readonly ProcessCandidatePolicy candidatePolicy;
+        private readonly Func<IEnumerable<LauncherEntry>> getRunningApplications;
+        private readonly Func<LauncherEntry, bool> askToAdd;
         private bool checkingProcesses;
-        private HashSet<string> declinedProcesses; // Stores rejected processes
-        private string selfProcessName; // Stores the application's own process name
+        private bool disposed;
 
-        public ProcessMonitor(ListBox targetListBox, LauncherDatabase database)
+        public bool PromptsPaused { get; set; }
+
+        public ProcessMonitor(ListBox targetListBox, LauncherDatabase database,
+            Func<IEnumerable<LauncherEntry>> getRunningApplications = null,
+            Func<LauncherEntry, bool> askToAdd = null, ProcessCandidatePolicy candidatePolicy = null)
         {
             listBox = targetListBox;
             this.database = database;
-            declinedProcesses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            selfProcessName = Process.GetCurrentProcess().ProcessName; // Get self process name
-
-            processCheckTimer = new Timer { Interval = 3000 }; // Check every 3 seconds
-            processCheckTimer.Tick += ProcessCheckTimer_Tick;
+            this.getRunningApplications = getRunningApplications ?? EnumerateRunningApplications;
+            this.askToAdd = askToAdd ?? AskToAddProcess;
+            this.candidatePolicy = candidatePolicy ?? ProcessCandidatePolicy.CreateDefault();
+            processCheckTimer = new Timer { Interval = 3000 };
+            processCheckTimer.Tick += (sender, e) => ScanNow();
         }
 
         public void StartMonitoring()
         {
-            processCheckTimer.Start();
+            if (!disposed) processCheckTimer.Start();
         }
 
         public void StopMonitoring()
         {
-            processCheckTimer.Stop();
+            if (!disposed) processCheckTimer.Stop();
         }
 
         public void Dispose()
         {
+            disposed = true;
             processCheckTimer.Dispose();
         }
 
-        private void ProcessCheckTimer_Tick(object sender, EventArgs e)
+        public void ScanNow()
         {
-            // A modal prompt pumps timer events; do not scan again while one is open.
-            if (checkingProcesses) return;
+            // Modal dialogs pump timer events. Keep one scan active until its prompt closes.
+            if (disposed || checkingProcesses || PromptsPaused || !processCheckTimer.Enabled) return;
             checkingProcesses = true;
-            Process[] runningProcesses = null;
             try
             {
                 var knownPaths = new HashSet<string>(database.GetLaunchers().Select(entry => entry.FilePath),
                     StringComparer.OrdinalIgnoreCase);
-                runningProcesses = Process.GetProcesses();
-                foreach (Process process in runningProcesses)
+                var deniedPaths = new HashSet<string>(database.GetDeniedExecutables()
+                    .Where(entry => entry.IsDenied).Select(entry => entry.FilePath), StringComparer.OrdinalIgnoreCase);
+                foreach (var application in getRunningApplications())
                 {
-                    string processName;
-                    string processPath;
-                    try
-                    {
-                        if (string.IsNullOrEmpty(process.MainWindowTitle) || IsSystemProcess(process)) continue;
-                        processName = process.ProcessName;
-                        processPath = GetProcessPath(process);
-                    }
-                    catch (InvalidOperationException) { continue; } // Process exited during the scan.
-                    catch (System.ComponentModel.Win32Exception) { continue; }
+                    if (disposed || PromptsPaused || !processCheckTimer.Enabled) break;
+                    if (!candidatePolicy.ShouldPrompt(application.DisplayName, application.FilePath)) continue;
+                    string fullPath = Path.GetFullPath(application.FilePath);
+                    if (knownPaths.Contains(fullPath) || deniedPaths.Contains(fullPath)) continue;
 
-                    if (string.IsNullOrEmpty(processPath) ||
-                        processName.Equals(selfProcessName, StringComparison.OrdinalIgnoreCase) ||
-                        knownPaths.Contains(processPath) || declinedProcesses.Contains(processPath)) continue;
-
-                    if (AskToAddProcess(processName, processPath))
+                    bool accepted = askToAdd(application);
+                    if (disposed) break;
+                    if (accepted)
                     {
-                        var entry = database.AddLauncher(processPath, processName);
+                        var entry = database.AddLauncher(fullPath, application.DisplayName);
                         listBox.Items.Add(entry);
-                        knownPaths.Add(processPath);
+                        knownPaths.Add(fullPath);
                     }
                     else
                     {
-                        declinedProcesses.Add(processPath);
+                        database.SaveDeniedExecutables(new[] { new DeniedExecutable
+                        {
+                            FilePath = fullPath, DisplayName = application.DisplayName, IsDenied = true
+                        } });
+                        deniedPaths.Add(fullPath);
                     }
                 }
             }
             catch (Exception ex)
             {
                 StopMonitoring();
-                MessageBox.Show($"Executable scanning stopped: {ex.Message}", "Scanner error",
+                MessageBox.Show(listBox.FindForm(), $"Executable scanning stopped: {ex.Message}", "Scanner error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
-                if (runningProcesses != null)
-                    foreach (var process in runningProcesses) process.Dispose();
                 checkingProcesses = false;
             }
         }
 
-        private bool AskToAddProcess(string processName, string processPath)
+        private bool AskToAddProcess(LauncherEntry application)
         {
-            string[] systemProcesses =
-            {
-                "explorer", "taskmgr", "dwm", "conhost", "csrss", "wininit", "winlogon", "smss",
-                "services", "svchost", "lsass", "fontdrvhost", "sihost", "spoolsv", "SearchIndexer"
-            };
-
-            if (systemProcesses.Contains(processName, StringComparer.OrdinalIgnoreCase))
-            {
-                return false; // Skip system processes
-            }
-
-            // If the process has already been declined, do not prompt again
-            if (declinedProcesses.Contains(processPath))
-            {
-                return false;
-            }
-
-            return MessageBox.Show($"Add {processName} ({processPath}) to the list?", "New Process Detected", MessageBoxButtons.YesNo) == DialogResult.Yes;
+            return MessageBox.Show(listBox.FindForm(),
+                $"Add {application.DisplayName} ({application.FilePath}) to the list?\n\n" +
+                "Choosing No stops future prompts for this executable. You can change this in Settings → Denied executables.",
+                "New Application Detected", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
         }
 
-        private bool IsSystemProcess(Process process)
+        private static IEnumerable<LauncherEntry> EnumerateRunningApplications()
         {
+            Process[] processes = Process.GetProcesses();
             try
             {
-                string processPath = GetProcessPath(process);
-
-                if (string.IsNullOrEmpty(processPath) ||
-                    processPath.StartsWith(@"C:\Windows\", StringComparison.OrdinalIgnoreCase))
+                foreach (var process in processes)
                 {
-                    return true; // It's a system process
+                    var candidate = GetCandidate(process);
+                    if (candidate != null) yield return candidate;
                 }
             }
-            catch
+            finally
             {
-                return true; // Likely a system process if access is restricted
+                foreach (var process in processes) process.Dispose();
             }
-
-            return false;
         }
 
-        private string GetProcessPath(Process process)
+        private static LauncherEntry GetCandidate(Process process)
         {
             try
             {
-                return process.MainModule.FileName; // Try to get the process path
+                if (string.IsNullOrWhiteSpace(process.MainWindowTitle)) return null;
+                string path = process.MainModule?.FileName;
+                if (string.IsNullOrWhiteSpace(path)) return null;
+                return new LauncherEntry { DisplayName = process.ProcessName, FilePath = Path.GetFullPath(path) };
             }
-            catch (System.ComponentModel.Win32Exception)
-            {
-                return string.Empty; // Return empty if access is denied
-            }
-            catch (Exception)
-            {
-                return string.Empty; // Catch any unexpected errors
-            }
+            catch (System.ComponentModel.Win32Exception) { return null; }
+            catch (InvalidOperationException) { return null; }
+            catch (NotSupportedException) { return null; }
         }
     }
 }
-
-
-
-
-
-

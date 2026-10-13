@@ -9,16 +9,16 @@ their Windows file associations.
 - Add, remove, and rename applications in the list
 - Launch `.exe` and runnable `.jar` files
 - Open other file types with their Windows default application
+- Scan running desktop applications, excluding Windows system and built-in applications
+- Remember declined executables across restarts and manage them in Settings
 
 # Future features
 
 - Add settings
   - Change color scheme
   - Resize list box
-  - Enable/Disable auto prompt
   - Enable/Disable auto executable scan
 - Auto prompt user when launching an application to see if they want to add exectuable to the list.
-- Scan for exetuables automatically
 - Alphabetical sorting 
 
 # How to use
@@ -29,6 +29,8 @@ their Windows file associations.
 
 * Remove an application
     - Select an entry, click Remove App, and confirm with Yes.
+    - The executable is also marked as denied so the scanner will not suggest it again.
+    - Uncheck it in Settings → Denied executables and click Save to allow future prompts.
 
 * Rename an application
     - Select an entry, click Rename App, enter a new name, then click OK.
@@ -45,6 +47,24 @@ See the [Java launcher documentation](https://docs.oracle.com/en/java/javase/21/
 Applications start with their containing folder as the working directory. Java
 applications can display a console window. Automatic scanning continues to detect
 running executables; add JAR files manually using Add App.
+
+## Automatic scanning and denied executables
+
+In Settings, turn Auto Executable Scan On and click OK. The scanner checks visible
+desktop applications every three seconds. Windows installation folders, Windows
+shell processes, built-in Windows app packages, and the launcher itself are ignored.
+Third-party apps such as Discord, Steam, and Notepad++ remain eligible for prompts.
+
+Choosing Yes saves the executable to your list. Choosing No saves a denial in the
+SQLite database, so repeated processes and application restarts do not prompt again.
+Entries already in your list are recognized by executable path, even after renaming.
+Scanning pauses while Settings or its Denied executables form is open.
+
+Open **Settings → Denied executables** to change saved decisions. Checked entries
+are blocked from prompting. Uncheck an entry and click Save to allow it to ask again
+on the next scan if the app is still running. Unchecked entries remain in the list
+so you can check them again later. Cancel discards unsaved checkbox changes. Windows
+system applications remain excluded automatically. You can still add files manually.
 
 # Data storage
 
@@ -96,4 +116,14 @@ jar --create --file "Tests/bin/Debug/net472/Java probe, test.jar" --main-class J
 ```
 
 
+## Main app list
 ![screenshot](https://github.com/Adam-OGithub/PorksLauncher/blob/main/images/demo/main_app_screenshot.png?raw=true)
+
+## Auto scan application to add
+![screenshot](https://github.com/Adam-OGithub/PorksLauncher/blob/main/images/demo/add_application.png?raw=true)
+
+## Denied Executables list
+![screenshot](https://github.com/Adam-OGithub/PorksLauncher/blob/main/images/demo/denied_exe_list.png?raw=true)
+
+## Settings Menu
+![screenshot](https://github.com/Adam-OGithub/PorksLauncher/blob/main/images/demo/setting_menu.png?raw=true)
