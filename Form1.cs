@@ -72,8 +72,10 @@ namespace PorksLauncher
                 MessageBox.Show("No application selected to remove!");
                 return;
             }
-            if (MessageBox.Show(this, $"Do you want to remove {entry.DisplayName}?", "Confirm",
-                MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+            if (MessageBox.Show(this, $"Remove \"{entry.DisplayName}\" from your application list?\n\n" +
+                "Its executable will also be added to the Denied executables list, so the scanner won't ask to add it again.\n\n" +
+                "You can allow future prompts in Settings → Denied executables.", "Confirm removal",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
             RunDatabaseAction(() =>
             {
                 database.RemoveLauncher(entry.Id);
@@ -139,34 +141,46 @@ namespace PorksLauncher
 
         private void settings_btn_Click(object sender, EventArgs e)
         {
-            RunDatabaseAction(() =>
+            processMonitor.PromptsPaused = true;
+            try
             {
-                var settings = database.GetSettings();
-                using (var prompt = new Form
+                RunDatabaseAction(() =>
                 {
-                    Width = 400, Height = 200, FormBorderStyle = FormBorderStyle.FixedDialog,
-                    Text = "Settings", StartPosition = FormStartPosition.CenterParent
-                })
-                {
-                    var labelAutoPrompt = new Label { Left = 20, Top = 20, Text = "Enable/Disable Auto Prompt", Width = 200 };
-                    var labelAutoFind = new Label { Left = 20, Top = 60, Text = "Enable/Disable Auto Executable Scan", Width = 230 };
-                    var autoPrompt = new Button { Text = settings["autoPrompt"], Left = 250, Width = 80, Top = 15 };
-                    var autoFind = new Button { Text = settings["autoFind"], Left = 250, Width = 80, Top = 55 };
-                    var ok = new Button { Text = "OK", Left = 100, Width = 80, Top = 120, DialogResult = DialogResult.OK };
-                    var cancel = new Button { Text = "Cancel", Left = 200, Width = 80, Top = 120, DialogResult = DialogResult.Cancel };
-                    autoPrompt.Click += (s, ev) => ToggleSetting(autoPrompt);
-                    autoFind.Click += (s, ev) => ToggleSetting(autoFind);
-                    prompt.Controls.AddRange(new Control[] { labelAutoPrompt, autoPrompt, labelAutoFind, autoFind, ok, cancel });
-                    prompt.AcceptButton = ok;
-                    prompt.CancelButton = cancel;
-                    if (prompt.ShowDialog(this) != DialogResult.OK) return;
-                    settings["autoPrompt"] = autoPrompt.Text;
-                    settings["autoFind"] = autoFind.Text;
-                    database.SaveSettings(settings);
-                    ApplySettings(settings);
-                    MessageBox.Show("Settings saved successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-            });
+                    var settings = database.GetSettings();
+                    using (var prompt = new Form
+                    {
+                        Width = 420, Height = 220, FormBorderStyle = FormBorderStyle.FixedDialog,
+                        Text = "Settings", StartPosition = FormStartPosition.CenterParent
+                    })
+                    {
+                        var labelAutoFind = new Label { Left = 20, Top = 20, Text = "Enable/Disable Auto Executable Scan", Width = 230 };
+                        var autoFind = new Button { Text = settings["autoFind"], Left = 250, Width = 80, Top = 15 };
+                        var denied = new Button { Text = "Denied executables…", Left = 20, Width = 180, Top = 60 };
+                        denied.Click += (s, ev) =>
+                        {
+                            RunDatabaseAction(() =>
+                            {
+                                using (var deniedForm = new DeniedExecutablesForm(database)) deniedForm.ShowDialog(prompt);
+                            });
+                        };
+                        var ok = new Button { Text = "OK", Left = 100, Width = 80, Top = 125, DialogResult = DialogResult.OK };
+                        var cancel = new Button { Text = "Cancel", Left = 200, Width = 80, Top = 125, DialogResult = DialogResult.Cancel };
+                        autoFind.Click += (s, ev) => ToggleSetting(autoFind);
+                        prompt.Controls.AddRange(new Control[] { labelAutoFind, autoFind, denied, ok, cancel });
+                        prompt.AcceptButton = ok;
+                        prompt.CancelButton = cancel;
+                        if (prompt.ShowDialog(this) != DialogResult.OK) return;
+                        settings["autoFind"] = autoFind.Text;
+                        database.SaveSettings(settings);
+                        ApplySettings(settings);
+                        MessageBox.Show("Settings saved successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                });
+            }
+            finally
+            {
+                processMonitor.PromptsPaused = false;
+            }
         }
 
         private static void ToggleSetting(Button button)

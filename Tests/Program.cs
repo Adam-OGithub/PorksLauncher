@@ -19,8 +19,11 @@ internal static class Program
             TestFailedImportCanRetry();
             TestFormLoadsDatabase();
             TestApplicationLaunchInfo();
+            TestProcessFilteringAndDecisions();
+            TestDeniedExecutablesForm();
+            TestRemovalDeniesExecutable();
             if (args.Length == 1) TestRealJarLaunch(args[0]);
-            Console.WriteLine("PASS: SQLite storage, migration, form initialization, and application launch configuration.");
+            Console.WriteLine("PASS: Storage, migration, launch configuration, process filtering, persistent denials, prompt reentrancy, and denied-executable form.");
             return 0;
         }
         catch (Exception ex)
@@ -208,6 +211,159 @@ internal static class Program
         var imported = OpenDatabase(legacyFolder).GetLaunchers().Single();
         Assert(imported.FilePath == @"C:\Java, Apps\app.JAR" && imported.DisplayName == "Java, App",
             "Legacy JAR paths with commas must import correctly.");
+    }
+
+    private static void TestProcessFilteringAndDecisions()
+    {
+        var policy = new ProcessCandidatePolicy(@"D:\Windows", new[] { @"C:\Program Files", @"C:\Program Files (x86)" },
+            @"C:\Launcher\PorksLauncher.exe");
+        Assert(!policy.ShouldPrompt("notepad", @"D:\Windows\System32\notepad.exe"), "Windows paths on any drive must be ignored.");
+        Assert(!policy.ShouldPrompt("explorer", @"C:\Other\explorer.exe"), "Windows shell processes must be ignored.");
+        Assert(!policy.ShouldPrompt("Notepad", @"C:\Program Files\WindowsApps\Microsoft.WindowsNotepad_1\Notepad.exe"),
+            "Packaged Windows apps must be ignored.");
+        Assert(!policy.ShouldPrompt("msedge", @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"), "Built-in Edge must be ignored.");
+        Assert(!policy.ShouldPrompt("PorksLauncher", @"C:\Launcher\PorksLauncher.exe"), "The launcher must ignore itself.");
+        Assert(policy.ShouldPrompt("Discord", @"D:\WindowsTools\Discord.exe"), "A folder sharing the Windows prefix is not a Windows directory.");
+        Assert(policy.ShouldPrompt("ThirdParty", @"C:\Program Files\WindowsApps\Vendor.App_1\app.exe"), "Third-party packaged apps remain eligible.");
+
+        string databaseFolder = NewFolder();
+        var database = OpenDatabase(databaseFolder);
+        var applications = new[]
+        {
+            new LauncherEntry { DisplayName = "notepad", FilePath = @"D:\Windows\notepad.exe" },
+            new LauncherEntry { DisplayName = "Discord", FilePath = @"C:\Users\Person\Apps\Discord.exe" },
+            new LauncherEntry { DisplayName = "Discord", FilePath = @"c:\users\person\apps\DISCORD.EXE" },
+            new LauncherEntry { DisplayName = "Steam", FilePath = @"C:\Program Files (x86)\Steam\steam.exe" },
+            new LauncherEntry { DisplayName = "notepad++", FilePath = @"C:\Program Files\Notepad++\notepad++.exe" }
+        };
+        int prompts = 0;
+        using (var list = new ListBox())
+        {
+            ProcessMonitor monitor = null;
+            using (monitor = new ProcessMonitor(list, database, () => applications, entry =>
+            {
+                prompts++;
+                monitor.ScanNow(); // Simulate a timer tick while the modal prompt pumps messages.
+                return entry.DisplayName != "Discord";
+            }, policy))
+            {
+                monitor.StartMonitoring();
+                monitor.PromptsPaused = true;
+                monitor.ScanNow();
+                Assert(prompts == 0, "Opening settings must suppress scanner prompts.");
+                monitor.PromptsPaused = false;
+                monitor.ScanNow();
+                monitor.ScanNow();
+                Assert(prompts == 3 && list.Items.Count == 2, "Duplicate processes and reentrant scans must not repeat prompts.");
+                monitor.StopMonitoring();
+                monitor.ScanNow();
+                Assert(prompts == 3, "Disabled scanning must not prompt.");
+            }
+        }
+
+        database = OpenDatabase(databaseFolder);
+        var denied = database.GetDeniedExecutables().Single();
+        Assert(denied.IsDenied && denied.DisplayName == "Discord", "No must persist by executable path across restart.");
+        database.RenameLauncher(database.GetLaunchers().First().Id, "Renamed Steam");
+        using (var list = new ListBox())
+        using (var monitor = new ProcessMonitor(list, database, () => applications, entry => { prompts++; return false; }, policy))
+        {
+            monitor.StartMonitoring();
+            monitor.ScanNow();
+            Assert(prompts == 3, "Restart and renaming saved entries must not cause repeated prompts.");
+            denied.IsDenied = false;
+            database.SaveDeniedExecutables(new[] { denied });
+            monitor.ScanNow();
+            Assert(prompts == 4, "Unchecking a denied executable must allow the next scan to ask again.");
+            monitor.ScanNow();
+            Assert(prompts == 4, "Choosing No again must restore the persisted denial.");
+        }
+        database.SaveDeniedExecutables(new[] { new DeniedExecutable
+        {
+            FilePath = denied.FilePath.ToUpperInvariant(), DisplayName = "Discord", IsDenied = false
+        } });
+        Assert(database.GetDeniedExecutables().Count == 1 && !database.GetDeniedExecutables()[0].IsDenied,
+            "Case variants must update the same executable decision.");
+    }
+
+    private static void TestDeniedExecutablesForm()
+    {
+        var database = OpenDatabase(NewFolder());
+        database.SaveDeniedExecutables(new[] { new DeniedExecutable
+        {
+            FilePath = @"C:\Apps\Discord.exe", DisplayName = "Discord", IsDenied = true
+        } });
+        using (var form = new PorksLauncher.DeniedExecutablesForm(database))
+        {
+            var list = (CheckedListBox)form.Controls.Find("executableList", true).Single();
+            Assert(list.Items.Count == 1 && list.GetItemChecked(0), "Denied executable must appear checked in the management form.");
+            list.SetItemChecked(0, false);
+            typeof(PorksLauncher.DeniedExecutablesForm).GetMethod("SaveDecisions",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(form, null);
+            Assert(form.DialogResult == DialogResult.OK && !database.GetDeniedExecutables().Single().IsDenied,
+                "Saving an unchecked entry must enable future prompts.");
+        }
+        using (var form = new PorksLauncher.DeniedExecutablesForm(database))
+        {
+            var list = (CheckedListBox)form.Controls.Find("executableList", true).Single();
+            Assert(!list.GetItemChecked(0), "Allowed history must remain unchecked when the form reopens.");
+            list.SetItemChecked(0, true);
+            // Closing without Save must not persist a checkbox change.
+        }
+        Assert(!database.GetDeniedExecutables().Single().IsDenied, "Cancel must leave existing decisions unchanged.");
+    }
+
+    private static void TestRemovalDeniesExecutable()
+    {
+        string folder = NewFolder();
+        var database = OpenDatabase(folder);
+        var removed = database.AddLauncher(@"C:\Apps\Discord.exe", "Discord");
+        var retained = database.AddLauncher(@"C:\Other\Discord.exe", "Discord");
+        database.SaveDeniedExecutables(new[] { new DeniedExecutable
+        {
+            FilePath = removed.FilePath, DisplayName = "Old name", IsDenied = false
+        } });
+        database.RenameLauncher(removed.Id, "My Discord");
+        database.RemoveLauncher(removed.Id);
+        database = OpenDatabase(folder);
+        var denial = database.GetDeniedExecutables().Single();
+        Assert(denial.FilePath == removed.FilePath && denial.DisplayName == "My Discord" && denial.IsDenied,
+            "Removal must persist a checked denial and update existing allowed history with the current display name.");
+        Assert(database.GetLaunchers().Single().Id == retained.Id, "Removal must leave entries with the same name intact.");
+        database.RemoveLauncher(removed.Id);
+        Assert(database.GetDeniedExecutables().Count == 1, "Repeated removal must not duplicate denial history.");
+
+        int prompts = 0;
+        using (var list = new ListBox())
+        using (var monitor = new ProcessMonitor(list, database, () => new[] { removed }, entry => { prompts++; return false; }))
+        {
+            monitor.StartMonitoring();
+            monitor.ScanNow();
+            Assert(prompts == 0, "The scanner must not suggest a removed application after restart.");
+            denial.IsDenied = false;
+            database.SaveDeniedExecutables(new[] { denial });
+            monitor.ScanNow();
+            Assert(prompts == 1, "Unchecking a removed executable must allow another prompt.");
+        }
+
+        string failedFolder = NewFolder();
+        var failedDatabase = OpenDatabase(failedFolder);
+        var entryToKeep = failedDatabase.AddLauncher(@"C:\Apps\Steam.exe", "Steam");
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+            "Data Source=" + Path.Combine(failedFolder, "launcher.db")))
+        {
+            connection.Open();
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "CREATE TRIGGER FailDenial BEFORE INSERT ON DeniedExecutables BEGIN SELECT RAISE(ABORT, 'Simulated denial failure'); END;";
+                command.ExecuteNonQuery();
+            }
+        }
+        bool failed = false;
+        try { failedDatabase.RemoveLauncher(entryToKeep.Id); }
+        catch (Microsoft.Data.Sqlite.SqliteException) { failed = true; }
+        Assert(failed && failedDatabase.GetLaunchers().Single().Id == entryToKeep.Id &&
+            failedDatabase.GetDeniedExecutables().Count == 0, "A failed denial save must leave the launcher entry intact.");
     }
 
     private static void TestRealJarLaunch(string jarPath)
