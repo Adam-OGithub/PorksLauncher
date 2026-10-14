@@ -66,7 +66,11 @@ namespace PorksLauncher.Classes
 
                 command.CommandText = @"
                     INSERT OR IGNORE INTO Settings (Name, Value) VALUES ('autoPrompt', 'Off');
-                    INSERT OR IGNORE INTO Settings (Name, Value) VALUES ('autoFind', 'Off');";
+                    INSERT OR IGNORE INTO Settings (Name, Value) VALUES ('autoFind', 'Off');
+                    INSERT OR IGNORE INTO Settings (Name, Value) VALUES ('colorScheme', 'Original');
+                    INSERT OR IGNORE INTO Settings (Name, Value) VALUES ('listWidth', '667');
+                    INSERT OR IGNORE INTO Settings (Name, Value) VALUES ('listHeight', '565');
+                    INSERT OR IGNORE INTO Settings (Name, Value) VALUES ('alphabeticalSorting', 'Off');";
                 command.ExecuteNonQuery();
                 transaction.Commit();
             }

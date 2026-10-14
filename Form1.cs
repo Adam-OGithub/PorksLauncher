@@ -2,6 +2,7 @@ using PorksLauncher.Classes;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 
@@ -24,14 +25,22 @@ namespace PorksLauncher
             settings_btn.Visible = true;
             LoadList();
             processMonitor = new ProcessMonitor(listBox1, this.database);
-            ApplySettings(this.database.GetSettings());
+            ApplyPreferences(LauncherPreferences.FromSettings(this.database.GetSettings()));
         }
 
         private void LoadList()
         {
             var entries = database.GetLaunchers();
-            listBox1.Items.Clear();
-            listBox1.Items.AddRange(entries.ToArray());
+            long? selectedId = (listBox1.SelectedItem as LauncherEntry)?.Id;
+            listBox1.BeginUpdate();
+            try
+            {
+                listBox1.Items.Clear();
+                listBox1.Items.AddRange(entries.ToArray());
+                foreach (LauncherEntry entry in listBox1.Items)
+                    if (entry.Id == selectedId) { listBox1.SelectedItem = entry; break; }
+            }
+            finally { listBox1.EndUpdate(); }
         }
 
         private void RunDatabaseAction(Action action)
@@ -146,34 +155,11 @@ namespace PorksLauncher
             {
                 RunDatabaseAction(() =>
                 {
-                    var settings = database.GetSettings();
-                    using (var prompt = new Form
+                    var preferences = LauncherPreferences.FromSettings(database.GetSettings());
+                    using (var prompt = new SettingsForm(database, preferences))
                     {
-                        Width = 420, Height = 220, FormBorderStyle = FormBorderStyle.FixedDialog,
-                        Text = "Settings", StartPosition = FormStartPosition.CenterParent
-                    })
-                    {
-                        var labelAutoFind = new Label { Left = 20, Top = 20, Text = "Enable/Disable Auto Executable Scan", Width = 230 };
-                        var autoFind = new Button { Text = settings["autoFind"], Left = 250, Width = 80, Top = 15 };
-                        var denied = new Button { Text = "Denied executables…", Left = 20, Width = 180, Top = 60 };
-                        denied.Click += (s, ev) =>
-                        {
-                            RunDatabaseAction(() =>
-                            {
-                                using (var deniedForm = new DeniedExecutablesForm(database)) deniedForm.ShowDialog(prompt);
-                            });
-                        };
-                        var ok = new Button { Text = "OK", Left = 100, Width = 80, Top = 125, DialogResult = DialogResult.OK };
-                        var cancel = new Button { Text = "Cancel", Left = 200, Width = 80, Top = 125, DialogResult = DialogResult.Cancel };
-                        autoFind.Click += (s, ev) => ToggleSetting(autoFind);
-                        prompt.Controls.AddRange(new Control[] { labelAutoFind, autoFind, denied, ok, cancel });
-                        prompt.AcceptButton = ok;
-                        prompt.CancelButton = cancel;
                         if (prompt.ShowDialog(this) != DialogResult.OK) return;
-                        settings["autoFind"] = autoFind.Text;
-                        database.SaveSettings(settings);
-                        ApplySettings(settings);
-                        MessageBox.Show("Settings saved successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        UpdatePreferences(prompt.SelectedPreferences);
                     }
                 });
             }
@@ -183,18 +169,63 @@ namespace PorksLauncher
             }
         }
 
-        private static void ToggleSetting(Button button)
+        public bool IsScanning => processMonitor != null && processMonitor.IsMonitoring;
+
+        public void UpdatePreferences(LauncherPreferences preferences)
         {
-            button.Text = button.Text == "On" ? "Off" : "On";
+            if (preferences == null) throw new ArgumentNullException(nameof(preferences));
+            var validated = LauncherPreferences.FromSettings(preferences.ToSettings());
+            database.SaveSettings(validated.ToSettings());
+            ApplyPreferences(validated);
         }
 
-        private void ApplySettings(Dictionary<string, string> settings)
+        private void ApplyPreferences(LauncherPreferences preferences)
         {
-            if (settings.TryGetValue("autoFind", out string autoFind) && autoFind == "On")
-                processMonitor.StartMonitoring();
-            else
-                processMonitor.StopMonitoring();
+            AppTheme.Apply(this, preferences.ColorScheme);
+            if (preferences.ColorScheme == "Original")
+            {
+                btn_add.ForeColor = Color.ForestGreen;
+                btn_rm.ForeColor = Color.Firebrick;
+                rename_btn.ForeColor = Color.Blue;
+            }
+            MinimumSize = SizeFromClientSize(new Size(LauncherPreferences.MinListWidth + 36, LauncherPreferences.MinListHeight + 93));
+            MaximumSize = SizeFromClientSize(new Size(LauncherPreferences.MaxListWidth + 36, LauncherPreferences.MaxListHeight + 93));
+            listBox1.IntegralHeight = false;
+            ClientSize = new Size(preferences.ListWidth + 36, preferences.ListHeight + 93);
+            LayoutMainControls();
+            listBox1.Sorted = preferences.AlphabeticalSorting;
+            LoadList();
+            if (preferences.ScanEnabled) processMonitor.StartMonitoring();
+            else processMonitor.StopMonitoring();
         }
 
+        private void LayoutMainControls()
+        {
+            if (listBox1 == null || settings_btn == null) return;
+            var buttons = new[] { btn_add, btn_rm, rename_btn, settings_btn };
+            int buttonWidth = (ClientSize.Width - 36 - 36) / buttons.Length;
+            for (int index = 0; index < buttons.Length; index++)
+                buttons[index].SetBounds(18 + index * (buttonWidth + 12), 18, buttonWidth, 35);
+            listBox1.SetBounds(18, 75, Math.Max(1, ClientSize.Width - 36), Math.Max(1, ClientSize.Height - 93));
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            LayoutMainControls();
+        }
+
+        protected override void OnResizeEnd(EventArgs e)
+        {
+            base.OnResizeEnd(e);
+            if (database == null) return;
+            RunDatabaseAction(() =>
+            {
+                var preferences = LauncherPreferences.FromSettings(database.GetSettings());
+                preferences.ListWidth = listBox1.Width;
+                preferences.ListHeight = listBox1.Height;
+                database.SaveSettings(preferences.ToSettings());
+            });
+        }
     }
 }
