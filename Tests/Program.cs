@@ -22,8 +22,9 @@ internal static class Program
             TestProcessFilteringAndDecisions();
             TestDeniedExecutablesForm();
             TestRemovalDeniesExecutable();
+            TestAppearanceAndSortingPreferences();
             if (args.Length == 1) TestRealJarLaunch(args[0]);
-            Console.WriteLine("PASS: Storage, migration, launch configuration, process filtering, persistent denials, prompt reentrancy, and denied-executable form.");
+            Console.WriteLine("PASS: Storage, migration, launching, scanner decisions, denied-executable form, themes, resizing, sorting, and settings persistence.");
             return 0;
         }
         catch (Exception ex)
@@ -364,6 +365,86 @@ internal static class Program
         catch (Microsoft.Data.Sqlite.SqliteException) { failed = true; }
         Assert(failed && failedDatabase.GetLaunchers().Single().Id == entryToKeep.Id &&
             failedDatabase.GetDeniedExecutables().Count == 0, "A failed denial save must leave the launcher entry intact.");
+    }
+
+    private static void TestAppearanceAndSortingPreferences()
+    {
+        string folder = NewFolder();
+        var database = OpenDatabase(folder);
+        var defaults = LauncherPreferences.FromSettings(database.GetSettings());
+        Assert(defaults.ColorScheme == "Original" && defaults.ListWidth == 667 && defaults.ListHeight == 565 &&
+            !defaults.ScanEnabled && !defaults.AlphabeticalSorting, "New preferences must have safe defaults.");
+        var invalid = LauncherPreferences.FromSettings(new Dictionary<string, string>
+        {
+            { "colorScheme", "unknown" }, { "listWidth", "-10" }, { "listHeight", "bad" }
+        });
+        Assert(invalid.ColorScheme == "Original" && invalid.ListWidth == LauncherPreferences.MinListWidth && invalid.ListHeight == 565,
+            "Invalid saved preferences must fall back or clamp to usable values.");
+        var first = database.AddLauncher(@"C:\Apps\Charlie.exe", "Charlie");
+        database.AddLauncher(@"C:\Apps\Alpha.exe", "Alpha");
+        var preferences = new LauncherPreferences
+        {
+            ColorScheme = "Dark", ListWidth = 720, ListHeight = 420, ScanEnabled = true, AlphabeticalSorting = true
+        };
+        using (var form = new PorksLauncher.Form1(database))
+        {
+            var list = (ListBox)form.Controls.Find("listBox1", true).Single();
+            list.SelectedIndex = 0;
+            form.UpdatePreferences(preferences);
+            Assert(form.IsScanning && list.Sorted && list.Width == 720 && list.Height == 420,
+                "Settings must enable scanning, sorting, and the requested list size immediately.");
+            Assert(((LauncherEntry)list.Items[0]).DisplayName == "Alpha" && ((LauncherEntry)list.SelectedItem).Id == first.Id,
+                "Sorting must change display order while preserving the selected executable.");
+            Assert(form.BackColor.R == 28 && list.BackColor.R == 42 && list.ForeColor.R == 240,
+                "Dark theme must apply readable background and text colors.");
+            using (var scanner = new ProcessMonitor(list, database,
+                () => new[] { new LauncherEntry { FilePath = @"C:\Apps\Bravo.exe", DisplayName = "Bravo" } }, entry => true))
+            {
+                scanner.StartMonitoring();
+                scanner.ScanNow();
+            }
+            Assert(((LauncherEntry)list.Items[1]).DisplayName == "Bravo", "Scanner additions must stay alphabetically sorted.");
+            database.RenameLauncher(first.Id, "Aardvark");
+            form.UpdatePreferences(preferences);
+            Assert(((LauncherEntry)list.Items[0]).Id == first.Id, "Renamed entries must move to their new alphabetical position.");
+            preferences.ScanEnabled = false;
+            preferences.AlphabeticalSorting = false;
+            preferences.ColorScheme = "Light";
+            form.UpdatePreferences(preferences);
+            Assert(!form.IsScanning && !list.Sorted && ((LauncherEntry)list.Items[0]).Id == first.Id &&
+                list.BackColor == System.Drawing.Color.White, "Disabling scan and sorting must restore insertion order and apply the new theme.");
+
+            form.ClientSize = new System.Drawing.Size(836, 593);
+            typeof(PorksLauncher.Form1).GetMethod("OnResizeEnd",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(form, new object[] { EventArgs.Empty });
+            Assert(list.Width == 800 && list.Height == 500, "Dragging the main window must resize the list with margins.");
+            foreach (Control button in form.Controls.OfType<Button>())
+                Assert(button.Right <= form.ClientSize.Width && button.Bottom < list.Top, "Toolbar buttons must fit above the resized list.");
+        }
+        using (var reopened = new PorksLauncher.Form1(OpenDatabase(folder)))
+        {
+            var list = (ListBox)reopened.Controls.Find("listBox1", true).Single();
+            Assert(list.Width == 800 && list.Height == 500 && !list.Sorted && !reopened.IsScanning && list.BackColor == System.Drawing.Color.White,
+                "Appearance, resize, sorting, and scan choices must persist across restart.");
+        }
+        using (var settings = new PorksLauncher.SettingsForm(database, LauncherPreferences.FromSettings(database.GetSettings())))
+        {
+            var scheme = (ComboBox)settings.Controls.Find("colorScheme", true).Single();
+            Assert(scheme.Items.Count == 4 && (string)scheme.SelectedItem == "Light", "Settings must load the saved theme and provide four schemes.");
+            scheme.SelectedItem = "Forest";
+            Assert(settings.BackColor.G == 45 && database.GetSettings()["colorScheme"] == "Light",
+                "Theme preview and Cancel must not write settings before Save.");
+            ((NumericUpDown)settings.Controls.Find("listWidth", true).Single()).Value = 900;
+            ((NumericUpDown)settings.Controls.Find("listHeight", true).Single()).Value = 600;
+            ((CheckBox)settings.Controls.Find("scanEnabled", true).Single()).Checked = true;
+            ((CheckBox)settings.Controls.Find("alphabeticalSorting", true).Single()).Checked = true;
+            var save = (Button)settings.Controls.Find("saveButton", true).Single();
+            typeof(Button).GetMethod("OnClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                .Invoke(save, new object[] { EventArgs.Empty });
+            Assert(settings.SelectedPreferences.ColorScheme == "Forest" && settings.SelectedPreferences.ListWidth == 900 &&
+                settings.SelectedPreferences.ListHeight == 600 && settings.SelectedPreferences.ScanEnabled && settings.SelectedPreferences.AlphabeticalSorting,
+                "The Settings Save button must collect all five preferences.");
+        }
     }
 
     private static void TestRealJarLaunch(string jarPath)

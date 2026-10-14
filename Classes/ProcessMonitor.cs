@@ -19,6 +19,7 @@ namespace PorksLauncher.Classes
         private bool disposed;
 
         public bool PromptsPaused { get; set; }
+        public bool IsMonitoring => !disposed && processCheckTimer.Enabled;
 
         public ProcessMonitor(ListBox targetListBox, LauncherDatabase database,
             Func<IEnumerable<LauncherEntry>> getRunningApplications = null,

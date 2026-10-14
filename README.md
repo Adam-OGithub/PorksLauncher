@@ -11,14 +11,21 @@ their Windows file associations.
 - Open other file types with their Windows default application
 - Scan running desktop applications, excluding Windows system and built-in applications
 - Remember declined executables across restarts and manage them in Settings
+- Choose Original, Light, Dark, or Forest color schemes
+- Resize the application list through Settings or by dragging the main window
+- Enable optional alphabetical sorting
 
 # Future features
 
+<<<<<<< Updated upstream
 - Add settings
   - Change color scheme
   - Resize list box
   - Enable/Disable auto executable scan
   - Alphabetical sorting 
+=======
+- Auto prompt user when launching an application to see if they want to add exectuable to the list.
+>>>>>>> Stashed changes
 
 # How to use
 * Add an application
@@ -49,7 +56,7 @@ running executables; add JAR files manually using Add App.
 
 ## Automatic scanning and denied executables
 
-In Settings, turn Auto Executable Scan On and click OK. The scanner checks visible
+In Settings, check Enable automatic executable scan and click Save. The scanner checks visible
 desktop applications every three seconds. Windows installation folders, Windows
 shell processes, built-in Windows app packages, and the launcher itself are ignored.
 Third-party apps such as Discord, Steam, and Notepad++ remain eligible for prompts.
@@ -64,6 +71,19 @@ are blocked from prompting. Uncheck an entry and click Save to allow it to ask a
 on the next scan if the app is still running. Unchecked entries remain in the list
 so you can check them again later. Cancel discards unsaved checkbox changes. Windows
 system applications remain excluded automatically. You can still add files manually.
+
+## Appearance, list size, and sorting
+
+Settings offers Original, Light, Dark, and Forest color schemes, list width and height
+in pixels, the executable scan checkbox, and alphabetical sorting. Click Save to
+apply and remember changes; Cancel leaves your saved choices intact. Selecting a
+theme previews it in the settings dialog before saving.
+
+You can also drag the main window border to resize the list. That size is remembered
+when you finish dragging. Alphabetical sorting keeps additions from the file picker
+and scanner in A–Z order, and updates the order after renaming. Turning sorting off
+returns to the order in which entries were added. All these preferences persist
+across restarts in SQLite.
 
 # Data storage
 
