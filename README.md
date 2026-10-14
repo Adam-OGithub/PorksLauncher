@@ -18,8 +18,7 @@ their Windows file associations.
   - Change color scheme
   - Resize list box
   - Enable/Disable auto executable scan
-- Auto prompt user when launching an application to see if they want to add exectuable to the list.
-- Alphabetical sorting 
+  - Alphabetical sorting 
 
 # How to use
 * Add an application
