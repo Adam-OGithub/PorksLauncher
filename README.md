@@ -15,18 +15,6 @@ their Windows file associations.
 - Resize the application list through Settings or by dragging the main window
 - Enable optional alphabetical sorting
 
-# Future features
-
-<<<<<<< Updated upstream
-- Add settings
-  - Change color scheme
-  - Resize list box
-  - Enable/Disable auto executable scan
-  - Alphabetical sorting 
-=======
-- Auto prompt user when launching an application to see if they want to add exectuable to the list.
->>>>>>> Stashed changes
-
 # How to use
 * Add an application
     - Click Add App to select an `.exe` or `.jar` file.
