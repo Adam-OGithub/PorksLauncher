@@ -115,8 +115,14 @@ powershell -ExecutionPolicy Bypass -File Installer/Build-Installer.ps1
 The first build downloads the official .NET Framework runtime and verifies its
 Microsoft signature. Generated files stay under `bin` and are excluded from Git.
 The finished installer and its SHA-256 checksum are written to `bin\releases`.
-Version defaults to the application's file version in `Properties\AssemblyInfo.cs`.
-Update that version before building a new release. The installer includes the
+Each successful build automatically increments the patch version from
+`Properties\AssemblyInfo.cs`: `1.0.0` becomes `1.0.1`, then `1.0.2`, and so on.
+The application assembly/file versions, installer version, filename, and checksum
+all use the new version. Commit the updated `AssemblyInfo.cs` with each release.
+A failed build restores the original version. Concurrent builds in the same checkout
+are blocked to prevent duplicate version numbers. To set a major/minor version or
+explicitly rebuild a particular version, pass `-Version 2.0.0` to the build command.
+The installer includes the
 offline prerequisite, so its download is larger than the portable ZIP.
 
 On a machine where PorksLauncher is not already installed, an optional installer
