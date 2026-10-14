@@ -32,24 +32,6 @@ $prerequisitePath = Join-Path $installerWorkRoot 'prerequisites'
 $installerOutputPath = Join-Path $repositoryRoot 'bin\releases'
 New-Item -ItemType Directory -Force -Path $publishPath, $prerequisitePath, $installerOutputPath | Out-Null
 
-& dotnet publish (Join-Path $repositoryRoot 'PorksLauncher.csproj') --configuration Release --output $publishPath --verbosity minimal
-if ($LASTEXITCODE -ne 0) { throw 'Release publish failed.' }
-Copy-Item -LiteralPath (Join-Path $repositoryRoot 'README.md'), (Join-Path $repositoryRoot 'LICENSE') -Destination $publishPath
-
-foreach ($requiredFile in @('PorksLauncher.exe', 'PorksLauncher.exe.config', 'Microsoft.Data.Sqlite.dll',
-    'runtimes\win-x86\native\e_sqlite3.dll', 'runtimes\win-x64\native\e_sqlite3.dll')) {
-    if (-not (Test-Path -LiteralPath (Join-Path $publishPath $requiredFile))) {
-        throw "Published application is missing $requiredFile"
-    }
-}
-
-if (-not $Version) {
-    $assemblyVersion = [Version]([System.Diagnostics.FileVersionInfo]::GetVersionInfo(
-        (Join-Path $publishPath 'PorksLauncher.exe')).FileVersion)
-    $Version = $assemblyVersion.ToString(3)
-}
-if ($Version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw 'Version must be numeric, for example 1.0.0.' }
-
 # Bundle the official offline runtime: users do not need another download at install time.
 $frameworkInstaller = Join-Path $prerequisitePath 'NDP48-x86-x64-AllOS-ENU.exe'
 if (-not (Test-Path -LiteralPath $frameworkInstaller)) {
@@ -60,12 +42,52 @@ if ($frameworkSignature.Status -ne 'Valid' -or $frameworkSignature.SignerCertifi
     throw 'The bundled .NET Framework installer must have a valid Microsoft signature.'
 }
 
-& $InnoCompilerPath /Q "/DPublishDir=$publishPath" "/DPrerequisiteDir=$prerequisitePath" "/DAppVersion=$Version" "/DInstallerOutputDir=$installerOutputPath" (Join-Path $PSScriptRoot 'PorksLauncher.iss')
-if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
+. (Join-Path $PSScriptRoot 'Versioning.ps1')
+$versionLock = [System.IO.File]::Open((Join-Path $installerWorkRoot 'version.lock'),
+    [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+$assemblyInfoPath = Join-Path $repositoryRoot 'Properties\AssemblyInfo.cs'
+$versionChanged = $false
+$buildSucceeded = $false
+try {
+    $originalAssemblyBytes = [System.IO.File]::ReadAllBytes($assemblyInfoPath)
+    $originalAssemblyContent = [System.IO.File]::ReadAllText($assemblyInfoPath)
+    $versionPlan = Get-InstallerVersionPlan -AssemblyInfoContent $originalAssemblyContent -RequestedVersion $Version
+    $autoIncrement = -not $Version
+    $Version = $versionPlan.ReleaseVersion
+    $installerFile = Join-Path $installerOutputPath "PorksLauncher-Setup-$Version.exe"
+    if ($autoIncrement -and (Test-Path -LiteralPath $installerFile)) {
+        throw "Installer $Version already exists. Update AssemblyInfo.cs to the latest successful version, or explicitly choose -Version."
+    }
 
-$installerFile = Join-Path $installerOutputPath "PorksLauncher-Setup-$Version.exe"
-if (-not (Test-Path -LiteralPath $installerFile)) { throw 'Compiler did not produce the expected installer.' }
-$installerHash = Get-FileHash -LiteralPath $installerFile -Algorithm SHA256
-"$($installerHash.Hash.ToLowerInvariant())  $([System.IO.Path]::GetFileName($installerFile))" |
-    Set-Content -LiteralPath "$installerFile.sha256" -Encoding ascii
-Write-Host "Installer ready: $installerFile"
+    $hasUtf8Bom = $originalAssemblyBytes.Length -ge 3 -and $originalAssemblyBytes[0] -eq 239 -and
+        $originalAssemblyBytes[1] -eq 187 -and $originalAssemblyBytes[2] -eq 191
+    [System.IO.File]::WriteAllText($assemblyInfoPath, $versionPlan.UpdatedContent, [System.Text.UTF8Encoding]::new($hasUtf8Bom))
+    $versionChanged = $true
+    Write-Host "Building release $Version (application version $($versionPlan.AssemblyVersion))"
+
+    & dotnet publish (Join-Path $repositoryRoot 'PorksLauncher.csproj') --configuration Release --output $publishPath --verbosity minimal
+    if ($LASTEXITCODE -ne 0) { throw 'Release publish failed.' }
+    Copy-Item -LiteralPath (Join-Path $repositoryRoot 'README.md'), (Join-Path $repositoryRoot 'LICENSE') -Destination $publishPath
+    foreach ($requiredFile in @('PorksLauncher.exe', 'PorksLauncher.exe.config', 'Microsoft.Data.Sqlite.dll',
+        'runtimes\win-x86\native\e_sqlite3.dll', 'runtimes\win-x64\native\e_sqlite3.dll')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $publishPath $requiredFile))) { throw "Published application is missing $requiredFile" }
+    }
+    $publishedVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $publishPath 'PorksLauncher.exe')).FileVersion
+    if ($publishedVersion -ne $versionPlan.AssemblyVersion) { throw 'Published application version does not match the installer version.' }
+
+    & $InnoCompilerPath /Q "/DPublishDir=$publishPath" "/DPrerequisiteDir=$prerequisitePath" "/DAppVersion=$Version" "/DInstallerOutputDir=$installerOutputPath" (Join-Path $PSScriptRoot 'PorksLauncher.iss')
+    if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
+    if (-not (Test-Path -LiteralPath $installerFile)) { throw 'Compiler did not produce the expected installer.' }
+    $installerHash = Get-FileHash -LiteralPath $installerFile -Algorithm SHA256
+    "$($installerHash.Hash.ToLowerInvariant())  $([System.IO.Path]::GetFileName($installerFile))" |
+        Set-Content -LiteralPath "$installerFile.sha256" -Encoding ascii
+    $buildSucceeded = $true
+    Write-Host "Installer ready: $installerFile"
+} finally {
+    try {
+        if ($versionChanged -and -not $buildSucceeded) {
+            [System.IO.File]::WriteAllBytes($assemblyInfoPath, $originalAssemblyBytes)
+            Write-Warning 'Build failed. The original application version has been restored.'
+        }
+    } finally { $versionLock.Dispose() }
+}
