@@ -7,6 +7,7 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>PorksLauncher</RootNamespace>
     <AssemblyName>PorksLauncher</AssemblyName>
+    <ApplicationIcon>images\PorksLauncher.ico</ApplicationIcon>
     <TargetFramework>net472</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <EnableDefaultItems>false</EnableDefaultItems>
@@ -95,5 +96,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="images\PorksLauncher.ico" />
   </ItemGroup>
 </Project>

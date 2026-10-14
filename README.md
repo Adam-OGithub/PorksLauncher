@@ -85,6 +85,44 @@ still recognized. New entries and names can contain commas and apostrophes.
 
 # Building
 
+## Downloadable Windows installer
+
+Distribute `PorksLauncher-Setup-<version>.exe` as an asset on a GitHub Release.
+Users run setup, then launch PorksLauncher from the Start menu or optional desktop
+shortcut. They do not need Visual Studio, the source code, or a separate database
+installation. Setup installs the app for the current user and provides an uninstaller.
+Upgrading or uninstalling preserves the launcher database in `%AppData%\pork_launcher`.
+
+Setup supports Windows 10 and Windows 11. It bundles Microsoft's offline .NET
+Framework 4.8 installer and runs it only if .NET Framework 4.7.2 or later is absent.
+That prerequisite may request administrator access or a restart. Java is still
+needed when launching Java applications, and can be configured through `JAVA_HOME`
+or `PATH` as described above.
+
+To build setup, install [Inno Setup 6 or 7](https://jrsoftware.org/isdl.php), then run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Installer/Build-Installer.ps1
+```
+
+The first build downloads the official .NET Framework runtime and verifies its
+Microsoft signature. Generated files stay under `bin` and are excluded from Git.
+The finished installer and its SHA-256 checksum are written to `bin\releases`.
+Version defaults to the application's file version in `Properties\AssemblyInfo.cs`.
+Update that version before building a new release. The installer includes the
+offline prerequisite, so its download is larger than the portable ZIP.
+
+On a machine where PorksLauncher is not already installed, an optional installer
+test installs a temporary copy under `bin`, runs the regression checks against its
+installed files, and uninstalls that copy. It writes the normal Windows uninstall
+registration while testing and requires .NET Framework to be already installed:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Installer/Test-Installer.ps1 -InstallerPath bin/releases/PorksLauncher-Setup-1.0.0.exe
+```
+
+## Building from source
+
 Open `PorksLauncher.sln` in Visual Studio with the .NET desktop development workload
 and .NET Framework 4.7.2 targeting pack installed. Restore NuGet packages before
 building. The project uses `Microsoft.Data.Sqlite`, which includes the SQLite
